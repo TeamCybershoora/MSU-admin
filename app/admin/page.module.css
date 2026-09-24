@@ -1,0 +1,257 @@
+/* ── Admin Dashboard ─────────────────────────────────────── */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+/* ── Welcome Banner ─────────────────────────────────────── */
+
+.welcome {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  padding: 1.75rem 2rem;
+  background: linear-gradient(135deg, rgba(224, 122, 82, 0.08), rgba(240, 178, 133, 0.06));
+  border: 1px solid rgba(224, 122, 82, 0.12);
+  border-radius: 20px;
+}
+
+.welcomeText h2 {
+  font-family: var(--font-playfair), Georgia, serif;
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: var(--foreground);
+  margin: 0 0 0.4rem;
+}
+
+.welcomeText p {
+  font-size: 0.88rem;
+  color: color-mix(in srgb, var(--foreground) 60%, var(--muted));
+  margin: 0;
+  max-width: 500px;
+  line-height: 1.5;
+}
+
+.welcomeIcon {
+  width: 56px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 16px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: #fff;
+  flex-shrink: 0;
+  box-shadow: 0 8px 24px -6px rgba(224, 122, 82, 0.35);
+}
+
+.welcomeIcon svg {
+  width: 28px;
+  height: 28px;
+}
+
+/* ── Stats Grid ─────────────────────────────────────── */
+
+.statsGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1rem;
+}
+
+.statSkeleton {
+  min-height: 90px;
+}
+
+.skeletonPulse {
+  width: 100%;
+  height: 40px;
+  border-radius: 8px;
+  background: linear-gradient(90deg, rgba(0,0,0,0.04) 25%, rgba(0,0,0,0.08) 50%, rgba(0,0,0,0.04) 75%);
+  background-size: 200% 100%;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.errorCard {
+  grid-column: 1 / -1;
+}
+
+/* ── Section ─────────────────────────────────────── */
+
+.section {
+  padding: 1.5rem;
+}
+
+/* ── Quick Actions ─────────────────────────────────────── */
+
+.actionsGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+}
+
+.actionCard {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 1.2rem;
+  background: rgba(255, 255, 255, 0.5);
+  border: 1px solid rgba(21, 97, 109, 0.08);
+  border-radius: 14px;
+  text-decoration: none;
+  color: inherit;
+  transition: all 0.2s ease;
+}
+
+.actionCard:hover {
+  background: rgba(255, 255, 255, 0.75);
+  border-color: rgba(21, 97, 109, 0.15);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+}
+
+.actionIcon {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: rgba(21, 97, 109, 0.08);
+  color: #15616d;
+  flex-shrink: 0;
+}
+
+.actionIcon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.actionContent {
+  flex: 1;
+  min-width: 0;
+}
+
+.actionLabel {
+  display: block;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--foreground);
+}
+
+.actionDesc {
+  display: block;
+  font-size: 0.75rem;
+  color: color-mix(in srgb, var(--foreground) 45%, var(--muted));
+  margin-top: 0.1rem;
+}
+
+.actionArrow {
+  color: color-mix(in srgb, var(--foreground) 30%, var(--muted));
+  flex-shrink: 0;
+  transition: transform 0.2s;
+}
+
+.actionCard:hover .actionArrow {
+  transform: translateX(3px);
+  color: var(--accent);
+}
+
+/* ── System Info ─────────────────────────────────────── */
+
+.infoList {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.infoItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.7rem 0;
+  border-bottom: 1px solid rgba(21, 97, 109, 0.06);
+}
+
+.infoItem:last-child {
+  border-bottom: none;
+}
+
+.infoLabel {
+  font-size: 0.85rem;
+  color: color-mix(in srgb, var(--foreground) 65%, var(--muted));
+}
+
+.infoValue {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--foreground);
+}
+
+.unavailable {
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: color-mix(in srgb, var(--foreground) 35%, var(--muted));
+  font-style: italic;
+}
+
+/* ── Dark mode ─────────────────────────────────────── */
+
+:global(html.dark) .welcome {
+  background: linear-gradient(135deg, rgba(255, 103, 102, 0.08), rgba(255, 177, 115, 0.05));
+  border-color: rgba(255, 103, 102, 0.12);
+}
+
+:global(html.dark) .actionCard {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 255, 255, 0.06);
+}
+
+:global(html.dark) .actionCard:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+:global(html.dark) .actionIcon {
+  background: rgba(92, 184, 178, 0.12);
+  color: #5cb8b2;
+}
+
+:global(html.dark) .skeletonPulse {
+  background: linear-gradient(90deg, rgba(255,255,255,0.03) 25%, rgba(255,255,255,0.06) 50%, rgba(255,255,255,0.03) 75%);
+  background-size: 200% 100%;
+}
+
+/* ── Responsive ─────────────────────────────────────── */
+
+@media (max-width: 900px) {
+  .statsGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .actionsGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .welcome {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .welcomeText p {
+    max-width: none;
+  }
+}
+
+@media (max-width: 600px) {
+  .statsGrid {
+    grid-template-columns: 1fr;
+  }
+}
