@@ -35,6 +35,12 @@ interface PdfAttachmentFieldProps {
   replaceLabel?: string;
   uploading?: boolean;
   disabled?: boolean;
+  /**
+   * Block choosing/replacing a file without blocking removal — used when the
+   * academic structure is INACTIVE (no NEW upload, but an existing document can
+   * still be cleared).
+   */
+  disableUpload?: boolean;
   /** When false, no Remove action is offered for the stored PDF. */
   allowRemove?: boolean;
   onChoose: () => void;
@@ -52,12 +58,16 @@ export default function PdfAttachmentField({
   replaceLabel = "Replace PDF",
   uploading = false,
   disabled = false,
+  disableUpload = false,
   allowRemove = false,
   onChoose,
   onCancelSelection,
   onRemove,
 }: PdfAttachmentFieldProps) {
+  // `busy` gates the actions that touch the CURRENT attachment (cancel/remove);
+  // `chooseDisabled` additionally gates choosing/replacing a new file.
   const busy = disabled || uploading;
+  const chooseDisabled = busy || disableUpload;
 
   return (
     <div className={styles.pdfBox}>
@@ -73,7 +83,7 @@ export default function PdfAttachmentField({
               variant="secondary"
               size="sm"
               onClick={onChoose}
-              disabled={busy}
+              disabled={chooseDisabled}
             >
               {replaceLabel}
             </Button>
@@ -108,7 +118,7 @@ export default function PdfAttachmentField({
               variant="secondary"
               size="sm"
               onClick={onChoose}
-              disabled={busy}
+              disabled={chooseDisabled}
             >
               {replaceLabel}
             </Button>
@@ -133,7 +143,7 @@ export default function PdfAttachmentField({
             variant="teal"
             size="sm"
             onClick={onChoose}
-            disabled={busy}
+            disabled={chooseDisabled}
           >
             <Plus size={14} /> {chooseLabel}
           </Button>

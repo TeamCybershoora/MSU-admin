@@ -45,6 +45,7 @@ import { getStoredToken } from "@/lib/auth";
 import Card, { CardHeader } from "@/components/ui/card";
 import Button from "@/components/ui/button";
 import Modal, { ConfirmDialog } from "@/components/ui/modal";
+import RecordList, { RecordCard, RecordField } from "@/components/ui/record-list";
 import EmptyState from "@/components/empty-state";
 import ErrorState from "@/components/error-state";
 import styles from "./page.module.css";
@@ -230,6 +231,27 @@ export default function AdminCollegesPage() {
                 </tbody>
               </table>
             </div>
+
+            {/* Mobile only (<=600px): same colleges array as the table above,
+                rendered as record cards. Hidden on desktop/tablet. */}
+            <RecordList>
+              {colleges.map((college) => (
+                <RecordCard
+                  key={college.id}
+                  title={college.collegeName}
+                  subtitle={`Code: ${college.collegeCode || "—"}`}
+                  actions={
+                    <>
+                      <Button variant="ghost" size="sm" iconOnly onClick={() => openEditForm(college)} title="Edit" aria-label={`Edit ${college.collegeName}`}><Edit3 size={15} /></Button>
+                      <Button variant="ghost" size="sm" iconOnly onClick={() => setDeletingCollege(college)} title="Delete" aria-label={`Delete ${college.collegeName}`}><Trash2 size={15} /></Button>
+                    </>
+                  }
+                >
+                  <RecordField label="District">{college.district || "—"}</RecordField>
+                </RecordCard>
+              ))}
+            </RecordList>
+
             {pagination.totalPages > 1 && (
               <div className={styles.pagination}>
                 <Button variant="secondary" size="sm" disabled={pagination.page <= 1} onClick={() => fetchColleges(pagination.page - 1)}><ChevronLeft size={14} /> Previous</Button>

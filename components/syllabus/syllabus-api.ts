@@ -3,18 +3,20 @@
 /**
  * Client-side CRUD helpers for the syllabus admin UI.
  *
- * Every operation is addressed by generic identifiers — programme + semester +
- * subjectCode — so the exact same call manages BCA Semester 1 and B.Tech
- * Semester 2. No helper is named after a programme, semester or subject, and
- * the admin JWT (localStorage) is attached automatically.
+ * Every operation is addressed by the ACADEMIC IDENTITY the server validates
+ * against ProgrammeStructure — programme + academicSession (+ semester +
+ * subjectCode) — so the same call manages BCA/2023-24/Semester 1 and
+ * B.Tech/2026-27/Semester 2. No helper is named after a programme, session,
+ * semester or subject, and the admin JWT (localStorage) is attached
+ * automatically.
  *
- * API surface used (all existing, extended where noted):
- *   GET    /api/admin/syllabus                  — list (unchanged)
- *   POST   /api/admin/syllabus                  — create/upsert a semester
- *   PATCH  /api/admin/syllabus                  — update a semester/subject
- *   DELETE /api/admin/syllabus                  — delete subject/semester/all
- *   GET/POST/DELETE /api/admin/programme-syllabus — official programme PDF
- *   POST   /api/admin/syllabus/upload           — store a PDF (shared)
+ * API surface used:
+ *   GET    /api/admin/syllabus                  — list (filters include academicSession)
+ *   POST   /api/admin/syllabus                  — create/upsert a semester document
+ *   PATCH  /api/admin/syllabus                  — update a semester/subject/PDF
+ *   DELETE /api/admin/syllabus                  — delete subject/semester/identity
+ *   GET/POST/DELETE /api/admin/programme-syllabus — official programme PDF (per identity)
+ *   POST   /api/admin/syllabus/upload           — store a PDF (shared, unchanged)
  */
 
 import { getStoredToken } from "@/lib/auth";
@@ -139,18 +141,17 @@ export async function listSyllabi(params: {
   page?: number;
   search?: string;
   programme?: string;
+  academicSession?: string;
 }): Promise<SyllabusListResult> {
   const query = new URLSearchParams({
     page: String(params.page ?? 1),
-    limit: "20",
+    limit: "50",
   });
   if (params.search) query.set("search", params.search);
   if (params.programme) query.set("programme", params.programme);
+  if (params.academicSession) query.set("academicSession", params.academicSession);
 
-  const outcome = await request(
-    `/api/admin/syllabus?${query}`,
-    authInit("GET")
-  );
+  const outcome = await request(`/api/admin/syllabus?${query}`, authInit("GET"));
 
   if (!outcome.success) {
     return { success: false, message: outcome.message };
@@ -166,11 +167,15 @@ export async function listSyllabi(params: {
   };
 }
 
-/** Create a semester syllabus, or upsert the existing one. */
+/**
+ * Create a semester document for an academic identity, or upsert the existing
+ * one. `subjects` omitted leaves the existing subject list untouched.
+ */
 export function saveSyllabus(payload: {
   programme: string;
+  academicSession: string;
   semester: number;
-  subjects: SyllabusSubject[];
+  subjects?: SyllabusSubject[];
   pdfUrl?: string | null;
   pdfName?: string | null;
 }): Promise<ApiOutcome> {
@@ -178,11 +183,12 @@ export function saveSyllabus(payload: {
 }
 
 /**
- * Update ONE semester, identified by programme + semester.
- * `pdfUrl === undefined` leaves the existing attachment untouched.
+ * Update ONE semester document, identified by programme + academicSession +
+ * semester. `pdfUrl === undefined` leaves the existing attachment untouched.
  */
 export function updateSemester(
   programme: string,
+  academicSession: string,
   semester: number,
   changes: {
     semesterNumber?: number;
@@ -192,7 +198,7 @@ export function updateSemester(
 ): Promise<ApiOutcome> {
   return request(
     "/api/admin/syllabus",
-    jsonInit("PATCH", { programme, semester, ...changes })
+    jsonInit("PATCH", { programme, academicSession, semester, ...changes })
   );
 }
 
@@ -200,12 +206,13 @@ export function updateSemester(
  * Add or edit ONE subject inside a semester.
  *
  * `originalSubjectCode` names the subject being EDITED. When it is omitted the
- * call ADDS a new subject: the server performs no existing-subject lookup for
- * the new code, so a genuinely new subject is accepted. A code that already
- * exists in the same programme + semester is still rejected by the server.
+ * call ADDS a new subject. The subject name and academic metadata are always
+ * read from ProgrammeStructure by the server, so whatever this payload carries
+ * for `subjectName` is not authoritative.
  */
 export function updateSubject(
   programme: string,
+  academicSession: string,
   semester: number,
   subject: SyllabusSubject,
   originalSubjectCode?: string
@@ -214,70 +221,134 @@ export function updateSubject(
     "/api/admin/syllabus",
     jsonInit("PATCH", {
       programme,
+      academicSession,
       semester,
       subject: {
-        ...subject,
-        // Only sent when editing, so the server can tell add from edit.
+        // Only the code and document links are meaningful; the server reads the
+        // name from the academic structure.
+        subjectCode: subject.subjectCode,
+        syllabusUrl: subject.syllabusUrl,
+        pdfUrl: subject.pdfUrl,
         ...(originalSubjectCode ? { originalSubjectCode } : {}),
       },
     })
   );
 }
 
-/** Remove ONE subject, identified by its code. */
+/** Remove ONE subject, identified by its code, within an academic identity. */
 export function deleteSubject(
   programme: string,
+  academicSession: string,
   semester: number,
   subjectCode: string
 ): Promise<ApiOutcome> {
   const params = new URLSearchParams({
     programme,
+    academicSession,
     semester: String(semester),
     subjectCode,
   });
   return request(`/api/admin/syllabus?${params}`, authInit("DELETE"));
 }
 
-/** Remove ONE semester (its document, subjects and semester PDF). */
+/** Remove ONE semester document (its subjects and semester PDF). */
 export function deleteSemester(
   programme: string,
+  academicSession: string,
   semester: number
 ): Promise<ApiOutcome> {
   const params = new URLSearchParams({
     programme,
+    academicSession,
     semester: String(semester),
   });
   return request(`/api/admin/syllabus?${params}`, authInit("DELETE"));
 }
 
 /**
- * Remove EVERY semester/subject record of a programme.
+ * Remove EVERY semester/subject document of one academic identity.
  * The official programme PDF lives in a separate collection and is untouched.
  */
-export function deleteStructuredSyllabus(programme: string): Promise<ApiOutcome> {
-  const params = new URLSearchParams({ programme, scope: "programme" });
+export function deleteStructuredSyllabus(
+  programme: string,
+  academicSession: string
+): Promise<ApiOutcome> {
+  const params = new URLSearchParams({
+    programme,
+    academicSession,
+    scope: "programme",
+  });
   return request(`/api/admin/syllabus?${params}`, authInit("DELETE"));
 }
 
-/** Official programme-level PDF — create or replace. */
+/** Official programme-level PDF — create or replace for one identity. */
 export function saveProgrammeSyllabus(
   programme: string,
+  academicSession: string,
   pdfUrl: string,
   pdfName: string | null
 ): Promise<ApiOutcome> {
   return request(
     "/api/admin/programme-syllabus",
-    jsonInit("POST", { programme, pdfUrl, pdfName })
+    jsonInit("POST", { programme, academicSession, pdfUrl, pdfName })
   );
 }
 
-/** Official programme-level PDF — remove (structured records stay intact). */
-export function deleteProgrammeSyllabus(programme: string): Promise<ApiOutcome> {
+/**
+ * Official programme-level PDF — remove (structured records stay intact).
+ * A `null` session targets a legacy session-less document; no session is guessed.
+ */
+export function deleteProgrammeSyllabus(
+  programme: string,
+  academicSession: string | null
+): Promise<ApiOutcome> {
   const params = new URLSearchParams({ programme });
+  if (academicSession) params.set("academicSession", academicSession);
   return request(`/api/admin/programme-syllabus?${params}`, authInit("DELETE"));
 }
 
-/** List programme-level syllabus documents (for the programme dropdown). */
+/**
+ * The EXISTING MSU programme catalogue, as exposed by the public read-only
+ * endpoint GET /api/syllabus/programmes.
+ *
+ * The catalogue is DISCOVERED from stored data (ProgrammeStructure plus any
+ * legacy syllabus-only code) — there is no separate programme collection. A
+ * programme therefore appears here because a ProgrammeStructure exists for it,
+ * or because a document predating the structure integration references it.
+ * This is exactly the list the public syllabus feature offers, so Syllabus
+ * Management and the public site can never disagree about which programmes
+ * exist.
+ */
+export interface CatalogueProgramme {
+  programmeCode: string;
+  programmeName: string | null;
+}
+
+/** Read the existing programme catalogue (public, read-only). */
+export async function listCatalogueProgrammes(): Promise<CatalogueProgramme[]> {
+  try {
+    const res = await fetch("/api/syllabus/programmes");
+    const body = (await res.json().catch(() => null)) as {
+      success?: boolean;
+      data?: unknown;
+    } | null;
+
+    if (!res.ok || !body?.success || !Array.isArray(body.data)) return [];
+
+    return (body.data as Record<string, unknown>[])
+      .map((entry) => ({
+        programmeCode:
+          typeof entry.programmeCode === "string" ? entry.programmeCode : "",
+        programmeName:
+          typeof entry.programmeName === "string" ? entry.programmeName : null,
+      }))
+      .filter((entry) => entry.programmeCode !== "");
+  } catch {
+    return [];
+  }
+}
+
+/** List programme-level syllabus documents (for the identity dropdown). */
 export async function fetchProgrammeSyllabi(): Promise<
   ProgrammeSyllabusRecord[]
 > {

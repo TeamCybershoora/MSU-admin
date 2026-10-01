@@ -16,29 +16,50 @@
 import { Edit3, Eye, FileText, Plus, Trash2 } from "lucide-react";
 import Button from "@/components/ui/button";
 import SyllabusSubjectRow from "./syllabus-subject-row";
-import type { SyllabusRecord, SyllabusSubject } from "./types";
+import { identityLabel, type SyllabusRecord, type SyllabusSubject } from "./types";
 import styles from "./syllabus.module.css";
 
 interface SyllabusSemesterCardProps {
   record: SyllabusRecord;
   disabled?: boolean;
+  /**
+   * Legacy (session-less) document: it predates the Academic Structure
+   * integration, so its identity cannot be validated. Only removal is offered.
+   */
+  legacy?: boolean;
   onViewSemester: (record: SyllabusRecord) => void;
   onEditSemester: (record: SyllabusRecord) => void;
   onDeleteSemester: (record: SyllabusRecord) => void;
   onAddSubject: (record: SyllabusRecord) => void;
   onEditSubject: (record: SyllabusRecord, subject: SyllabusSubject) => void;
   onDeleteSubject: (record: SyllabusRecord, subject: SyllabusSubject) => void;
+  /** Per-subject document actions (uploaded directly from the row). */
+  onUploadSubjectPdf: (
+    record: SyllabusRecord,
+    subject: SyllabusSubject,
+    file: File
+  ) => void;
+  onRemoveSubjectPdf: (
+    record: SyllabusRecord,
+    subject: SyllabusSubject
+  ) => void;
+  /** Code of the subject whose PDF is currently uploading (null when none). */
+  uploadingSubjectCode?: string | null;
 }
 
 export default function SyllabusSemesterCard({
   record,
   disabled = false,
+  legacy = false,
   onViewSemester,
   onEditSemester,
   onDeleteSemester,
   onAddSubject,
   onEditSubject,
   onDeleteSubject,
+  onUploadSubjectPdf,
+  onRemoveSubjectPdf,
+  uploadingSubjectCode = null,
 }: SyllabusSemesterCardProps) {
   const subjectCount = record.subjects.length;
 
@@ -46,7 +67,10 @@ export default function SyllabusSemesterCard({
     <div className={styles.semesterCard}>
       <div className={styles.semesterHeader}>
         <div>
-          <h4 className={styles.semesterTitle}>Semester {record.semester}</h4>
+          <h4 className={styles.semesterTitle}>
+            {identityLabel(record.programme, record.academicSession)} · Semester{" "}
+            {record.semester}
+          </h4>
           <p className={styles.semesterMeta}>
             {subjectCount} {subjectCount === 1 ? "subject" : "subjects"}
             {record.pdfUrl ? " · Semester PDF attached" : ""}
@@ -74,15 +98,17 @@ export default function SyllabusSemesterCard({
           >
             <Eye size={15} />
           </Button>
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            onClick={() => onEditSemester(record)}
-            disabled={disabled}
-          >
-            <Edit3 size={14} /> Edit
-          </Button>
+          {!legacy && (
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => onEditSemester(record)}
+              disabled={disabled}
+            >
+              <Edit3 size={14} /> Edit
+            </Button>
+          )}
           <Button
             type="button"
             variant="danger"
@@ -95,6 +121,14 @@ export default function SyllabusSemesterCard({
         </div>
       </div>
 
+      {legacy && (
+        <p className={styles.formHint} role="note">
+          Legacy document (no academic session). It cannot be mapped to a
+          session automatically, so its academic identity is not editable here —
+          only removal is offered.
+        </p>
+      )}
+
       <div className={styles.subjectList}>
         {subjectCount === 0 ? (
           <p className={styles.emptyHint}>
@@ -106,6 +140,13 @@ export default function SyllabusSemesterCard({
               key={`${subject.subjectCode}-${index}`}
               subject={subject}
               disabled={disabled}
+              legacy={legacy}
+              uploading={
+                uploadingSubjectCode?.toUpperCase() ===
+                subject.subjectCode.toUpperCase()
+              }
+              onUploadPdf={(s, file) => onUploadSubjectPdf(record, s, file)}
+              onRemovePdf={(s) => onRemoveSubjectPdf(record, s)}
               onEdit={(s) => onEditSubject(record, s)}
               onDelete={(s) => onDeleteSubject(record, s)}
             />
@@ -113,17 +154,19 @@ export default function SyllabusSemesterCard({
         )}
       </div>
 
-      <div className={styles.semesterFooter}>
-        <Button
-          type="button"
-          variant="teal"
-          size="sm"
-          onClick={() => onAddSubject(record)}
-          disabled={disabled}
-        >
-          <Plus size={14} /> Add Subject
-        </Button>
-      </div>
+      {!legacy && (
+        <div className={styles.semesterFooter}>
+          <Button
+            type="button"
+            variant="teal"
+            size="sm"
+            onClick={() => onAddSubject(record)}
+            disabled={disabled}
+          >
+            <Plus size={14} /> Add Subject
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,0 +1,36 @@
+/* ==========================================================================
+   DocumentViewport — uniform scale-to-fit around the fixed A4 statement.
+
+   `transform: scale()` preserves the ornament's proportions exactly (it is a
+   uniform scale, never a stretch), and the wrapper's inline height keeps the
+   layout box in step with the scaled page.
+   ========================================================================== */
+
+.viewport {
+  width: 100%;
+  overflow: hidden;
+}
+
+.scaler {
+  /* Shrink-wraps the fixed-size statement, so `offsetWidth` (which the
+     viewport measures) is the document's real width and not the wrapper's. */
+  width: fit-content;
+  transform-origin: top left;
+}
+
+/* ── Print: no scaling, real millimetre size ──────────────────────── */
+
+@media print {
+  .viewport {
+    /* Inline height is used for the on-screen reservation only. */
+    height: auto !important;
+    overflow: visible;
+  }
+
+  .scaler {
+    /* A transform here would both scale the printed page and capture the
+       document's `position: fixed` containing block. */
+    transform: none !important;
+    width: auto !important;
+  }
+}

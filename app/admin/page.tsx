@@ -31,6 +31,9 @@ import {
   ArrowRight,
   GraduationCap,
   Building2,
+  Layers,
+  Megaphone,
+  Inbox,
 } from "lucide-react";
 import { getStoredToken } from "@/lib/auth";
 import Card, { CardHeader, StatCard } from "@/components/ui/card";
@@ -44,13 +47,35 @@ interface DashboardStats {
   totalFaculty: number | null;
   pendingApplications: number | null;
   upcomingExams: number | null;
+  /** Enquiries submitted through the public website, grouped by status. */
+  enquiriesByStatus?: {
+    new: number;
+    in_review: number;
+    responded: number;
+    closed: number;
+  };
 }
 
+/**
+ * Dashboard shortcuts to the major Admin management modules.
+ *
+ * Listed in the same order as the sidebar (app/admin/layout.tsx) so the two
+ * navigations agree. Icons mirror the sidebar's icons. Admin Management is
+ * intentionally absent — it is Super-Admin-only, and Change Password / Logout
+ * are account utilities rather than management modules.
+ *
+ * The Enquiry Management group has no page at /admin/enquiries (each enquiry
+ * type is its own page), so its shortcut points at the group's first existing
+ * destination rather than a route that would 404.
+ */
 const QUICK_ACTIONS = [
   { href: "/admin/students", label: "Manage Students", icon: Users, description: "View and manage student accounts" },
+  { href: "/admin/academic-structure", label: "Academic Structure", icon: Layers, description: "Manage programmes, semesters and subjects" },
   { href: "/admin/results", label: "Manage Results", icon: FileText, description: "Upload and manage result records" },
+  { href: "/admin/notices", label: "Notices", icon: Megaphone, description: "Publish and manage notices" },
   { href: "/admin/syllabus", label: "Manage Syllabus", icon: BookOpen, description: "Upload syllabus and documents" },
   { href: "/admin/colleges", label: "Manage Colleges", icon: Building2, description: "Manage affiliated colleges and PDF" },
+  { href: "/admin/enquiries/admission", label: "Inquiry Management", icon: Inbox, description: "Review and respond to enquiries" },
 ];
 
 export default function AdminDashboardPage() {
@@ -171,6 +196,40 @@ export default function AdminDashboardPage() {
               <ArrowRight size={16} className={styles.actionArrow} />
             </Link>
           ))}
+        </div>
+      </Card>
+
+      {/* Enquiry Summary */}
+      <Card className={styles.section}>
+        <CardHeader
+          title="Enquiry Summary"
+          subtitle="Enquiries submitted through the university website"
+        />
+        <div className={styles.infoList}>
+          <div className={styles.infoItem}>
+            <span className={styles.infoLabel}>New</span>
+            <span className={styles.infoValue}>
+              {stats?.enquiriesByStatus?.new ?? "—"}
+            </span>
+          </div>
+          <div className={styles.infoItem}>
+            <span className={styles.infoLabel}>In Review</span>
+            <span className={styles.infoValue}>
+              {stats?.enquiriesByStatus?.in_review ?? "—"}
+            </span>
+          </div>
+          <div className={styles.infoItem}>
+            <span className={styles.infoLabel}>Responded</span>
+            <span className={styles.infoValue}>
+              {stats?.enquiriesByStatus?.responded ?? "—"}
+            </span>
+          </div>
+          <div className={styles.infoItem}>
+            <span className={styles.infoLabel}>Closed</span>
+            <span className={styles.infoValue}>
+              {stats?.enquiriesByStatus?.closed ?? "—"}
+            </span>
+          </div>
         </div>
       </Card>
 

@@ -477,6 +477,14 @@
   color: color-mix(in srgb, var(--foreground) 65%, var(--muted));
 }
 
+/* ── Result statement document (View Result modal) ─────────────── */
+
+/* The document is a fixed A4 canvas that scales itself to the modal width,
+   so it only needs to be centred here. */
+.documentViewport {
+  margin: 0 auto;
+}
+
 /* ── Dark mode ─────────────────────────────────────── */
 
 :global(html.dark) .searchInput {
@@ -525,4 +533,47 @@
 :global(html.dark) .summaryItem {
   background: rgba(255, 255, 255, 0.04);
   border-color: rgba(255, 255, 255, 0.08);
+}
+
+/* ── Mobile ───────────────────────────────────────────────
+   The toolbar search row spans the full card (its input has a fixed
+   min-width that would otherwise push the Search button past the card
+   edge), filter selects wrap, and modal detail grids collapse to a
+   single column so nothing is clipped at phone widths.
+   ───────────────────────────────────────────────────────── */
+
+@media (max-width: 600px) {
+  .section {
+    padding: 1rem;
+  }
+
+  .searchForm {
+    width: 100%;
+  }
+
+  .searchInput {
+    min-width: 0;
+    flex: 1;
+  }
+
+  .toolbarRight {
+    flex-wrap: wrap;
+  }
+
+  .profileGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* The desktop table is replaced by the mobile record cards, which are
+     rendered from the same fetched array (components/ui/record-list.tsx).
+     Hiding the table removes the last source of horizontal page scroll.
+     The 720px blocks above are untouched, so tablet keeps the table. */
+  .tableWrapper {
+    display: none;
+  }
+
+  .pagination {
+    flex-wrap: wrap;
+    gap: 0.6rem;
+  }
 }

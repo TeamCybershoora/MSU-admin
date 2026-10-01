@@ -11,10 +11,16 @@
 import { parseSyllabusPdfId } from "@/lib/pdf-storage";
 import { safePdfFilename } from "@/lib/validation";
 
-/** Normalised subject shape stored inside a semester's syllabus. */
-export interface SyllabusSubjectInput {
+/**
+ * Normalised subject reference as submitted by the admin UI.
+ *
+ * It carries only what Syllabus Management OWNS — the subject CODE (the
+ * academic identity) and the document links. `subjectName` is deliberately not
+ * part of this shape: the name is authoritative in ProgrammeStructure and is
+ * filled in by the route from the resolved structure.
+ */
+export interface SyllabusSubjectRef {
   subjectCode: string;
-  subjectName: string;
   syllabusUrl: string | null;
   pdfUrl: string | null;
 }
@@ -28,42 +34,46 @@ export type ValidationResult<T> =
 const HTTP_URL_PATTERN = /^https?:\/\/\S+$/i;
 
 /**
- * Validate + normalise a list of subjects.
+ * Validate + normalise a list of subject REFERENCES.
  *
- * Empty lists are rejected (a semester upsert must carry at least one subject);
- * codes/names are trimmed and required, and the optional URLs must be valid
- * http(s) links. Extra/unknown fields are dropped.
+ * A reference carries the subject code plus the optional document links; the
+ * subject name and all academic metadata come from ProgrammeStructure and are
+ * never read from the request. The list may be empty (a semester may hold only
+ * a semester-level PDF) and duplicate codes are rejected so one subject is
+ * never attached twice within the same semester document.
  */
-export function validateSubjects(
+export function validateSubjectRefs(
   value: unknown
-): ValidationResult<SyllabusSubjectInput[]> {
-  if (!Array.isArray(value) || value.length === 0) {
-    return { ok: false, message: "At least one subject is required." };
+): ValidationResult<SyllabusSubjectRef[]> {
+  if (!Array.isArray(value)) {
+    return { ok: false, message: "Subjects must be a list." };
   }
 
-  const subjects: SyllabusSubjectInput[] = [];
+  const subjects: SyllabusSubjectRef[] = [];
+  const seen = new Set<string>();
 
   for (let i = 0; i < value.length; i++) {
     const raw = value[i] as Record<string, unknown> | null;
 
     if (!raw || typeof raw !== "object") {
-      return {
-        ok: false,
-        message: `Subject ${i + 1}: subjectCode and subjectName are required.`,
-      };
+      return { ok: false, message: `Subject ${i + 1}: subjectCode is required.` };
     }
 
     const subjectCode =
       typeof raw.subjectCode === "string" ? raw.subjectCode.trim() : "";
-    const subjectName =
-      typeof raw.subjectName === "string" ? raw.subjectName.trim() : "";
 
-    if (!subjectCode || !subjectName) {
+    if (!subjectCode) {
+      return { ok: false, message: `Subject ${i + 1}: subjectCode is required.` };
+    }
+
+    const key = subjectCode.toUpperCase();
+    if (seen.has(key)) {
       return {
         ok: false,
-        message: `Subject ${i + 1}: subjectCode and subjectName are required.`,
+        message: `Subject ${subjectCode} appears more than once in this semester.`,
       };
     }
+    seen.add(key);
 
     const urls: { syllabusUrl: string | null; pdfUrl: string | null } = {
       syllabusUrl: null,
@@ -84,7 +94,7 @@ export function validateSubjects(
       urls[field] = rawUrl.trim();
     }
 
-    subjects.push({ subjectCode, subjectName, ...urls });
+    subjects.push({ subjectCode, ...urls });
   }
 
   return { ok: true, data: subjects };

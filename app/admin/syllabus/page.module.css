@@ -205,7 +205,9 @@
 
 .semesterGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(19rem, 1fr));
+  /* min() keeps the minimum track inside narrow containers — a fixed 19rem
+     minimum would overflow phone-width viewports. */
+  grid-template-columns: repeat(auto-fit, minmax(min(19rem, 100%), 1fr));
   gap: 0.9rem;
 }
 
@@ -503,4 +505,34 @@
 :global(html.dark) .formField select {
   background: rgba(255, 255, 255, 0.04);
   border-color: rgba(255, 255, 255, 0.08);
+}
+
+/* ── Mobile ───────────────────────────────────────────────
+   The toolbar search row spans the full card (its input has a fixed
+   min-width that would otherwise push the Search button past the card
+   edge), filter selects wrap, and modal detail grids collapse to a
+   single column so nothing is clipped at phone widths.
+   ───────────────────────────────────────────────────────── */
+
+@media (max-width: 600px) {
+  .section {
+    padding: 1rem;
+  }
+
+  .searchForm {
+    width: 100%;
+  }
+
+  .searchInput {
+    min-width: 0;
+    flex: 1;
+  }
+
+  .toolbarRight {
+    flex-wrap: wrap;
+  }
+
+  .profileGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }

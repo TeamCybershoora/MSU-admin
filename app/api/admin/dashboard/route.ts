@@ -4,6 +4,7 @@ import Student from "@/models/Student";
 import Result from "@/models/Result";
 import Syllabus from "@/models/Syllabus";
 import College from "@/models/College";
+import Enquiry from "@/models/Enquiry";
 import { authenticateAdmin } from "@/lib/admin-auth";
 
 /**
@@ -21,11 +22,25 @@ export async function GET(req: Request) {
     await connectDB();
 
     // Run counts in parallel for performance
-    const [totalStudents, totalResults, totalSyllabi, totalColleges] = await Promise.all([
+    const [
+      totalStudents,
+      totalResults,
+      totalSyllabi,
+      totalColleges,
+      newEnquiries,
+      inReviewEnquiries,
+      respondedEnquiries,
+      closedEnquiries,
+    ] = await Promise.all([
       Student.countDocuments(),
       Result.countDocuments(),
       Syllabus.countDocuments(),
       College.countDocuments(),
+      // Enquiries created by the public MSU website, grouped by workflow status.
+      Enquiry.countDocuments({ status: "new" }),
+      Enquiry.countDocuments({ status: "in_review" }),
+      Enquiry.countDocuments({ status: "responded" }),
+      Enquiry.countDocuments({ status: "closed" }),
     ]);
 
     return NextResponse.json({
@@ -35,6 +50,13 @@ export async function GET(req: Request) {
         totalResults,
         totalSyllabi,
         totalColleges,
+        // Counts only — enquiry contents are never part of a dashboard payload.
+        enquiriesByStatus: {
+          new: newEnquiries,
+          in_review: inReviewEnquiries,
+          responded: respondedEnquiries,
+          closed: closedEnquiries,
+        },
         // Placeholder fields — no data source exists yet
         totalFaculty: null,
         pendingApplications: null,

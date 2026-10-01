@@ -43,6 +43,11 @@ import {
   KeyRound,
   Building2,
   Megaphone,
+  Inbox,
+  ChevronRight,
+  Mail,
+  Layers,
+  MessageSquare,
 } from "lucide-react";
 import { getStoredToken, clearAuthSession } from "@/lib/auth";
 import styles from "./layout.module.css";
@@ -56,11 +61,67 @@ interface AdminInfo {
 const NAV_ITEMS = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
   { href: "/admin/students", label: "Student Management", icon: Users },
+  //
+  // Master academic data (programme → session → semester → subject). It sits
+  // directly above Result and Syllabus because those modules read this
+  // definition of what is taught; this page only manages the definition.
+  //
+  {
+    href: "/admin/academic-structure",
+    label: "Academic Structure",
+    icon: Layers,
+  },
   { href: "/admin/results", label: "Result Management", icon: FileText },
   { href: "/admin/notices", label: "Notices Management", icon: Megaphone },
   { href: "/admin/syllabus", label: "Syllabus & Documents", icon: BookOpen },
   { href: "/admin/colleges", label: "College Management", icon: Building2 },
 ];
+
+//
+// Enquiry Management — the ONE sidebar entry for enquiries, expanding to the
+// two type-scoped pages below. There is no page at the group href itself:
+// each child route lists only its own enquiry type (the type filter is always
+// sent to the API and validated server-side).
+//
+const ENQUIRY_NAV_GROUP = {
+  href: "/admin/enquiries",
+  label: "Enquiry Management",
+  icon: Inbox,
+  children: [
+    {
+      href: "/admin/enquiries/admission",
+      label: "Admission Enquiries",
+      icon: GraduationCap,
+    },
+    {
+      href: "/admin/enquiries/college-registration",
+      label: "College Registration Enquiries",
+      icon: Building2,
+    },
+    {
+      href: "/admin/enquiries/general",
+      label: "General Enquiries",
+      icon: MessageSquare,
+    },
+    {
+      href: "/admin/enquiries/automated-email",
+      label: "Automated Email",
+      icon: Mail,
+    },
+  ],
+};
+
+function isActivePath(href: string, pathname: string): boolean {
+  return pathname === href || pathname.startsWith(href + "/");
+}
+
+//
+// Acknowledgement-email settings now live inside the Enquiry Management group
+// (see ENQUIRY_NAV_GROUP.children above), reached at
+// /admin/enquiries/automated-email. The API re-checks authentication on each
+// request, and template writes follow the same auth rules as the rest of the
+// admin API.
+//
 
 //
 // Rendered only for Super Admins. This is presentation only — every
@@ -88,6 +149,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [admin, setAdmin] = useState<AdminInfo | null>(null);
   const [checking, setChecking] = useState(true);
+  // Enquiry group open/closed. Starts open when landing directly on one of its
+  // pages; navigating into the group from anywhere expands it (see the
+  // lastPathname adjustment below); the admin can still toggle it manually.
+  const [enquiryGroupOpen, setEnquiryGroupOpen] = useState(
+    () => !!pathname && isActivePath(ENQUIRY_NAV_GROUP.href, pathname)
+  );
 
   const isLoginPage = pathname === "/admin/login";
 
@@ -131,6 +198,32 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { checkAuth(); }, [checkAuth]);
 
+  // The mobile drawer is a modal surface: lock page scrolling behind it and
+  // restore the previous inline value when it closes (inline styles only —
+  // the stylesheet's own overflow rules are untouched).
+  // The drawer can only be opened from the mobile menu button, but if the
+  // viewport crosses back to the desktop layout while it is open (rotate /
+  // resize), clear the open state so neither the lock nor a stale flag
+  // survives. setState runs in the matchMedia callback (a subscription),
+  // never synchronously in the effect body.
+  useEffect(() => {
+    if (!sidebarOpen) return;
+
+    const desktop = window.matchMedia("(min-width: 901px)");
+    const handleViewportChange = () => {
+      if (desktop.matches) setSidebarOpen(false);
+    };
+    desktop.addEventListener("change", handleViewportChange);
+
+    const previousOverflow = document.documentElement.style.overflow;
+    document.documentElement.style.overflow = "hidden";
+
+    return () => {
+      desktop.removeEventListener("change", handleViewportChange);
+      document.documentElement.style.overflow = previousOverflow;
+    };
+  }, [sidebarOpen]);
+
   // Close the mobile drawer whenever the route changes. Adjusted during render
   // (React's "Adjusting some state when a prop changes") rather than in an
   // effect, so the drawer is already closed in the same pass instead of one
@@ -140,6 +233,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   if (lastPathname !== pathname) {
     setLastPathname(pathname);
     setSidebarOpen(false);
+    if (isActivePath(ENQUIRY_NAV_GROUP.href, pathname)) {
+      setEnquiryGroupOpen(true);
+    }
   }
 
   if (isLoginPage) {
@@ -184,14 +280,20 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         .slice(0, 2)
     : "AD";
 
-  const navItems =
-    admin?.role === "super_admin"
-      ? [...NAV_ITEMS, SUPER_ADMIN_NAV_ITEM]
-      : [...NAV_ITEMS, CHANGE_PASSWORD_NAV_ITEM];
+  const extraNavItem =
+    admin?.role === "super_admin" ? SUPER_ADMIN_NAV_ITEM : CHANGE_PASSWORD_NAV_ITEM;
+  const navItems = [...NAV_ITEMS, extraNavItem];
 
-  const currentItem = navItems.find(
-    (item) => item.href === pathname || pathname.startsWith(item.href + "/")
+  // Most specific match first: a child page's title beats the group, an exact
+  // href beats a prefix match (the Dashboard href matches every /admin path,
+  // so a plain prefix search would label every page "Dashboard").
+  const enquiryChildItem = ENQUIRY_NAV_GROUP.children.find((child) =>
+    isActivePath(child.href, pathname)
   );
+  const currentItem =
+    enquiryChildItem ??
+    navItems.find((item) => item.href === pathname) ??
+    navItems.find((item) => isActivePath(item.href, pathname));
   const pageTitle = currentItem?.label || "Admin Portal";
 
   return (
@@ -218,9 +320,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
         <nav className={styles.nav}>
           <span className={styles.navLabel}>Main Menu</span>
-          {navItems.map((item) => {
-            const isActive =
-              item.href === pathname || pathname.startsWith(item.href + "/");
+          {NAV_ITEMS.map((item) => {
+            const isActive = isActivePath(item.href, pathname);
             return (
               <Link
                 key={item.href}
@@ -232,6 +333,62 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               </Link>
             );
           })}
+
+          {/* Enquiry Management — collapsible parent, exactly one entry */}
+          <div className={styles.navGroup}>
+            <button
+              type="button"
+              className={`${styles.navItem} ${
+                isActivePath(ENQUIRY_NAV_GROUP.href, pathname)
+                  ? styles.navItemActive
+                  : ""
+              }`}
+              onClick={() => setEnquiryGroupOpen((open) => !open)}
+              aria-expanded={enquiryGroupOpen}
+              aria-controls="enquiry-nav-children"
+            >
+              <ENQUIRY_NAV_GROUP.icon />
+              {ENQUIRY_NAV_GROUP.label}
+              <ChevronRight
+                aria-hidden="true"
+                className={`${styles.navChevron} ${
+                  enquiryGroupOpen ? styles.navChevronOpen : ""
+                }`}
+              />
+            </button>
+
+            {enquiryGroupOpen && (
+              <div className={styles.navSubList} id="enquiry-nav-children">
+                {ENQUIRY_NAV_GROUP.children.map((child) => {
+                  const isActive = isActivePath(child.href, pathname);
+                  return (
+                    <Link
+                      key={child.href}
+                      href={child.href}
+                      className={`${styles.navItem} ${styles.navSubItem} ${
+                        isActive ? styles.navItemActive : ""
+                      }`}
+                    >
+                      <child.icon />
+                      {child.label}
+                    </Link>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          <Link
+            href={extraNavItem.href}
+            className={`${styles.navItem} ${
+              isActivePath(extraNavItem.href, pathname)
+                ? styles.navItemActive
+                : ""
+            }`}
+          >
+            <extraNavItem.icon />
+            {extraNavItem.label}
+          </Link>
         </nav>
 
         <div className={styles.sidebarFooter}>

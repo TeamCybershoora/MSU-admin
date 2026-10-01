@@ -161,7 +161,19 @@ export async function GET(req: Request) {
     const query: Record<string, unknown> = { isDeleted: false };
 
     if (contentType && contentType !== "All" && VALID_CONTENT_TYPES.includes(contentType as ContentType)) {
-      query.contentType = contentType;
+      if (contentType === "notice") {
+        /* "notice" is the implicit default: the model schema defaults to it and
+         * toSafeNotice() renders `doc.contentType || "notice"`. Rows written
+         * before the field existed (or with an empty value) therefore display
+         * as "Notice" in the table but carry no/empty contentType, so a plain
+         * `{ contentType: "notice" }` matched none of them — the "Notices"
+         * filter came back with zero rows while those notices were listed.
+         * Match every value that the serializer would render as "notice".
+         * ($in: [null] also matches documents where the field is missing.) */
+        query.contentType = { $in: ["notice", "", null] };
+      } else {
+        query.contentType = contentType;
+      }
     }
 
     if (search) {

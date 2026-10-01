@@ -77,6 +77,43 @@ export function sanitizeAadhar(aadhar: string): string {
   return aadhar.replace(/-/g, "");
 }
 
+/* ── Student management ─────────────────────────────────────────── */
+
+/**
+ * Student account states. A student is never hard-deleted while it has
+ * dependent records — it is set INACTIVE instead. ACTIVE is the default and
+ * the state a legacy document (no stored status) is treated as.
+ */
+export const STUDENT_STATUSES = ["ACTIVE", "INACTIVE"] as const;
+export type StudentStatus = (typeof STUDENT_STATUSES)[number];
+
+/**
+ * Normalise a student status coming from a request body.
+ * Returns the canonical uppercase form, or `null` when invalid.
+ */
+export function parseStudentStatus(value: unknown): StudentStatus | null {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim().toUpperCase();
+  return (STUDENT_STATUSES as readonly string[]).includes(normalized)
+    ? (normalized as StudentStatus)
+    : null;
+}
+
+/**
+ * Validate the hard-delete confirmation value.
+ *
+ * The admin must retype the student's email (case-insensitive) — the stable
+ * unique identifier the management UI displays. This is re-checked on the
+ * server; the client dialog is never the source of truth.
+ */
+export function isDeleteConfirmationValid(
+  input: unknown,
+  email: string
+): boolean {
+  if (typeof input !== "string") return false;
+  return input.trim().toLowerCase() === email.trim().toLowerCase();
+}
+
 /* ── File upload validation ─────────────────────────────────────── */
 
 /** Maximum accepted PDF size (10 MB). */

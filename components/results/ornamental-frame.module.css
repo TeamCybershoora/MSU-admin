@@ -1,0 +1,89 @@
+/* ==========================================================================
+   OrnamentalFrame — four-sided border cut from ONE single-side strip.
+
+   The four `<svg>` edges are absolutely positioned inside `.frame`. The
+   top/bottom bands span the full page width, the left/right bands the full
+   page height, so each corner is an overlap of two bands rather than a gap.
+   The horizontal bands are painted last (higher z-index) so the corner square
+   is filled edge-to-edge by real, undistorted ornament pixels.
+
+   Page size and thickness come from custom properties so the same geometry can
+   be re-expressed in mm for print without touching the component:
+
+     --doc-w    page width          (default 794px  = A4 @96dpi)
+     --doc-h    page height         (default 1123px = A4 @96dpi)
+     --msu-band frame thickness     (set from JS = strip height = 20px)
+
+   NOTE: the ornament is tiled in CSS pixels (the SVGs have no viewBox), so
+   changing --doc-w / --doc-h only changes how many times the frieze repeats.
+   It never rescales or stretches the ornament.
+   ========================================================================== */
+
+/*
+ * NOTE: --doc-w / --doc-h are intentionally NOT declared here. The document
+ * owns the page size (and overrides it in millimetres for print), so the frame
+ * must only read the values with a fallback.
+ */
+.frame {
+  position: relative;
+  width: var(--doc-w, 794px);
+  height: var(--doc-h, 1123px);
+  background: #fff;
+  /* Keep content inside the page so it can never be drawn over the border. */
+  overflow: hidden;
+}
+
+.edge {
+  position: absolute;
+  display: block;
+  pointer-events: none;
+}
+
+/* ── Horizontal sides ─────────────────────────────────────────────── */
+
+.top {
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: var(--msu-band);
+  z-index: 3;
+}
+
+/*
+ * Bottom: the same band reflected about its own centre line. The strip's rule
+ * lines therefore stay on the inside of the frame, matching the top edge.
+ */
+.bottom {
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: var(--msu-band);
+  z-index: 3;
+  transform: scaleY(-1);
+}
+
+/* ── Vertical sides ───────────────────────────────────────────────── */
+
+/*
+ * Left / right reuse the identical SVG tile, rotated 90° inside the pattern
+ * (`patternTransform` on the <pattern> in the component), so the frieze runs
+ * down the page. The element box is the band thickness wide by one page tall,
+ * which keeps the ornament at 1:1 — only the repetition count changes.
+ */
+.left {
+  top: 0;
+  left: 0;
+  width: var(--msu-band);
+  height: var(--doc-h, 1123px);
+  /* Below the horizontal bands so each corner is closed by the top/bottom
+     ornament rather than by an end-cut of the vertical band. */
+  z-index: 2;
+}
+
+.right {
+  top: 0;
+  right: 0;
+  width: var(--msu-band);
+  height: var(--doc-h, 1123px);
+  z-index: 2;
+}

@@ -347,3 +347,45 @@
   background: rgba(255, 255, 255, 0.04);
   border-color: rgba(255, 255, 255, 0.08);
 }
+
+/* ── Mobile ───────────────────────────────────────────────
+   The toolbar search row spans the full card (its input has a fixed
+   min-width that would otherwise push the Search button past the card
+   edge), filter selects wrap, and modal detail grids collapse to a
+   single column so nothing is clipped at phone widths.
+   ───────────────────────────────────────────────────────── */
+
+@media (max-width: 600px) {
+  .section {
+    padding: 1rem;
+  }
+
+  .searchForm {
+    width: 100%;
+  }
+
+  .searchInput {
+    min-width: 0;
+    flex: 1;
+  }
+
+  .toolbarRight {
+    flex-wrap: wrap;
+  }
+
+  .profileGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* The desktop table is replaced by the mobile record cards, which are
+     rendered from the same fetched array (components/ui/record-list.tsx).
+     Hiding the table removes the last source of horizontal page scroll. */
+  .tableWrapper {
+    display: none;
+  }
+
+  .pagination {
+    flex-wrap: wrap;
+    gap: 0.6rem;
+  }
+}

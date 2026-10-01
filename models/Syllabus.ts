@@ -1,7 +1,24 @@
 import mongoose, { Schema, type Document } from "mongoose";
+import { ACADEMIC_SESSION_PATTERN } from "@/lib/programme-structure";
 
 /**
- * Syllabus model — one document per programme + semester.
+ * Syllabus model — the DOCUMENT layer for one academic identity.
+ *
+ * OWNERSHIP (Phase 2A): ProgrammeStructure is the single source of truth for
+ * academic metadata. This collection stores only syllabus DOCUMENTS and their
+ * associations; it never defines curriculum.
+ *
+ * Identity is `programme + academicSession + semester`. `programme` and
+ * `academicSession` are NOT free text chosen here — they are validated against
+ * an existing ProgrammeStructure by the admin API, and the subject list is
+ * limited to subjects that structure actually defines (the stored `subjectName`
+ * is a denormalized display snapshot, always re-derived from the structure on
+ * write, never an independent curriculum definition).
+ *
+ * LEGACY RECORDS: documents written before the integration carry no
+ * `academicSession` (stored as null). They are preserved exactly as they are and
+ * are never given a guessed session — a session-less record can only be
+ * removed, never silently attributed.
  */
 
 /** A single subject inside a semester's syllabus. */
@@ -13,7 +30,14 @@ export interface ISyllabusSubject {
 }
 
 export interface ISyllabus extends Document {
+  /** Programme code (e.g. "BCA") — stored uppercase; owned by ProgrammeStructure. */
   programme: string;
+  /**
+   * Academic session (e.g. "2023-24") — the second half of the academic
+   * identity. Null only on legacy documents created before the integration.
+   */
+  academicSession: string | null;
+  /** Numeric semester identity (1–12); `programme + academicSession + semester` is the key. */
   semester: number;
   subjects: ISyllabusSubject[];
   /** Public URL of the syllabus PDF for this programme + semester (null = none). */
@@ -29,6 +53,13 @@ type SyllabusLike = Pick<
   ISyllabus,
   "programme" | "semester" | "subjects" | "pdfUrl" | "pdfName"
 >;
+
+/** Academic session is optional (legacy) but must look like 2025-26 when present. */
+const academicSessionValidator = {
+  validator: (v: string | null | undefined) =>
+    v === null || v === undefined || v === "" || ACADEMIC_SESSION_PATTERN.test(v),
+  message: "Academic session must look like 2025-26.",
+};
 
 /** URL is optional; when present it must be a well-formed http(s) link. */
 const urlValidator = {
@@ -76,6 +107,17 @@ const syllabusSchema = new Schema<ISyllabus>(
           "Programme must be 1-20 characters (letters, spaces, dots, ampersands or hyphens).",
       },
     },
+    // Null = a legacy document that predates the Academic Structure integration.
+    // New documents always carry the session of the ProgrammeStructure they were
+    // validated against; the API (not the schema) is what requires it, so an
+    // existing legacy record stays loadable and saveable.
+    academicSession: {
+      type: String,
+      default: null,
+      trim: true,
+      uppercase: false,
+      validate: academicSessionValidator,
+    },
     semester: {
       type: Number,
       required: [true, "Semester is required"],
@@ -115,8 +157,25 @@ const syllabusSchema = new Schema<ISyllabus>(
   }
 );
 
-// One syllabus per programme + semester
-syllabusSchema.index({ programme: 1, semester: 1 }, { unique: true });
+/**
+ * One syllabus document per academic identity: programme + academicSession +
+ * semester.
+ *
+ * The session is part of the key so BCA / 2023-24 / Semester 1 and
+ * BCA / 2025-26 / Semester 1 are different documents. Legacy session-less
+ * records index with a null session and are never merged into a session.
+ *
+ * MIGRATION NOTE: this replaces the original `{ programme, semester }` unique
+ * index. An existing database still carries that older index, which must be
+ * dropped once by an operator (see the Phase 2A report) — this code neither
+ * drops nor rewrites any index or record automatically.
+ */
+syllabusSchema.index(
+  { programme: 1, academicSession: 1, semester: 1 },
+  { unique: true, name: "idx_syllabus_identity" }
+);
+// Legacy lookups (session-less records) stay cheap without being unique.
+syllabusSchema.index({ programme: 1, semester: 1 }, { name: "idx_syllabus_legacy_identity" });
 
 /**
  * Return clean, public syllabus data (no _id, no __v, no timestamps).

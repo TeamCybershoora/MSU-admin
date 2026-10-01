@@ -167,3 +167,61 @@
   background: #2c2b2d;
   border-color: rgba(255, 255, 255, 0.08);
 }
+
+/* ── Mobile ────────────────────────────────
+   Below 600px the overlay gutter and modal padding shrink so the content
+   column keeps usable width; the modal itself is already fluid
+   (width: 100%, capped by max-width, height capped by 100dvh). */
+
+@media (max-width: 600px) {
+  .overlay {
+    padding: 1rem;
+  }
+
+  .modal {
+    padding: 1.25rem;
+  }
+}
+
+/* ── Print ───────────────────────────────────────
+   Modals are screen affordances. When a modal contains a printable document
+   (e.g. the Statement of Marks), the overlay must stop being a fixed, centred
+   container so the document can render at the top of the page.
+
+   `backdrop-filter` is dropped as well: it creates a containing block for
+   `position: fixed` descendants, which would otherwise capture the printable
+   document instead of the page. */
+
+@media print {
+  .overlay {
+    position: static;
+    inset: auto;
+    display: block;
+    padding: 0;
+    background: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    animation: none;
+  }
+
+  .modal {
+    width: auto;
+    max-width: none;
+    max-height: none;
+    overflow: visible;
+    padding: 0;
+    background: none;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    animation: none;
+  }
+
+  .modalScrollable {
+    overflow: visible;
+  }
+
+  .closeBtn {
+    display: none !important;
+  }
+}

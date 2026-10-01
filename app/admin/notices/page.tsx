@@ -33,13 +33,14 @@
  *   - GET/POST/PUT/DELETE /api/admin/notices (server-side routes)
  */
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Search, Filter, Eye, Edit3, ChevronLeft, ChevronRight, FileText, X, Plus, Trash2 } from "lucide-react";
 import { getStoredToken } from "@/lib/auth";
 import Card, { CardHeader } from "@/components/ui/card";
 import Button from "@/components/ui/button";
 import Badge from "@/components/ui/badge";
 import Modal, { ConfirmDialog } from "@/components/ui/modal";
+import RecordList, { RecordCard, RecordField } from "@/components/ui/record-list";
 import EmptyState from "@/components/empty-state";
 import ErrorState from "@/components/error-state";
 import { NOTICE_CATEGORIES, VALID_CONTENT_TYPES, type NoticeCategory, type NoticeStatus, type ContentType } from "@/lib/notice-types";
@@ -85,8 +86,13 @@ export default function AdminNoticesPage() {
   const [deletingNotice, setDeletingNotice] = useState<NoticeRecord | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
+  // Monotonic request id. Only the newest request is allowed to write state,
+  // so a slow earlier response can never overwrite a newer (filtered) one.
+  const requestSeq = useRef(0);
+
   const fetchNotices = useCallback(async (page = 1) => {
     const token = getStoredToken(); if (!token) return;
+    const seq = ++requestSeq.current;
     setLoading(true); setError("");
     try {
       const params = new URLSearchParams({ page: page.toString(), limit: "20" });
@@ -95,12 +101,18 @@ export default function AdminNoticesPage() {
       if (contentTypeFilter) params.set("contentType", contentTypeFilter);
       if (statusFilter) params.set("status", statusFilter);
       const res = await fetch(`/api/admin/notices?${params}`, { headers: { Authorization: `Bearer ${token}` } });
+      if (seq !== requestSeq.current) return;
       if (!res.ok) { setError("Unable to load notices."); return; }
       const data = await res.json();
+      if (seq !== requestSeq.current) return;
       if (data.success) { setNotices(data.data); setPagination(data.pagination); }
-    } catch { setError("Unable to connect to server."); } finally { setLoading(false); }
+    } catch { if (seq === requestSeq.current) setError("Unable to connect to server."); } finally { if (seq === requestSeq.current) setLoading(false); }
   }, [search, categoryFilter, contentTypeFilter, statusFilter]);
 
+  // Single source of refetch: this callback's identity changes with every
+  // filter/search value, so the effect below refetches with the NEW values.
+  // (Filter handlers must NOT refetch themselves — see the comment on the
+  // selects: an immediate call there would run a stale closure.)
   useEffect(() => { fetchNotices(1); }, [fetchNotices]);
 
   function handleSearch(e: React.FormEvent) { e.preventDefault(); fetchNotices(1); }
@@ -162,23 +174,26 @@ export default function AdminNoticesPage() {
             <div className={styles.searchInput}>
               <Search size={16} />
               <input type="text" placeholder="Search by title, summary, or category..." value={search} onChange={(e) => setSearch(e.target.value)} />
-              {search && (<button type="button" className={styles.clearBtn} onClick={() => { setSearch(""); setTimeout(() => fetchNotices(1), 0); }}><X size={14} /></button>)}
+              {search && (<button type="button" className={styles.clearBtn} onClick={() => setSearch("")}><X size={14} /></button>)}
             </div>
             <Button type="submit" variant="primary" size="sm"><Search size={14} /> Search</Button>
           </form>
           <div className={styles.toolbarRight}>
             <div className={styles.filterRow}>
               <Filter size={14} />
-              <select value={contentTypeFilter} onChange={(e) => { setContentTypeFilter(e.target.value); setTimeout(() => fetchNotices(1), 0); }} className={styles.select}>
+              {/* Filter selects only update state. The refetch happens in the
+                  effect above, with the new value — calling fetchNotices()
+                  here would use the previous render's closure (stale filter). */}
+              <select value={contentTypeFilter} onChange={(e) => setContentTypeFilter(e.target.value)} className={styles.select}>
                 <option value="">All Types</option>
                 {VALID_CONTENT_TYPES.map((ct) => (<option key={ct} value={ct}>{ct.charAt(0).toUpperCase() + ct.slice(1)}</option>))}
               </select>
             </div>
-            <select value={categoryFilter} onChange={(e) => { setCategoryFilter(e.target.value); setTimeout(() => fetchNotices(1), 0); }} className={styles.select}>
+            <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className={styles.select}>
               <option value="">All Categories</option>
               {NOTICE_CATEGORIES.map((cat) => (<option key={cat} value={cat}>{cat}</option>))}
             </select>
-            <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setTimeout(() => fetchNotices(1), 0); }} className={styles.select}>
+            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className={styles.select}>
               <option value="">All Status</option>
               <option value="published">Published</option>
               <option value="draft">Draft</option>
@@ -219,6 +234,30 @@ export default function AdminNoticesPage() {
                 </tbody>
               </table>
             </div>
+
+            {/* Mobile only (<=600px): same notices array as the table above,
+                rendered as record cards. Hidden on desktop/tablet. */}
+            <RecordList>
+              {notices.map((n) => (
+                <RecordCard
+                  key={n.id}
+                  title={n.title}
+                  subtitle={n.contentType ? n.contentType.charAt(0).toUpperCase() + n.contentType.slice(1) : "Notice"}
+                  actions={
+                    <>
+                      <Button variant="ghost" size="sm" iconOnly onClick={() => setViewingNotice(n)} title="View" aria-label={`View notice: ${n.title}`}><Eye size={15} /></Button>
+                      <Button variant="ghost" size="sm" iconOnly onClick={() => openEditForm(n)} title="Edit" aria-label={`Edit notice: ${n.title}`}><Edit3 size={15} /></Button>
+                      <Button variant="ghost" size="sm" iconOnly onClick={() => setDeletingNotice(n)} title="Delete" aria-label={`Delete notice: ${n.title}`}><Trash2 size={15} /></Button>
+                    </>
+                  }
+                >
+                  <RecordField label="Category"><Badge variant={getCategoryVariant(n.category)}>{n.category}</Badge></RecordField>
+                  <RecordField label="Published">{formatDate(n.publishedDate)}</RecordField>
+                  <RecordField label="Status"><Badge variant={getStatusVariant(n.status)}>{n.status}</Badge></RecordField>
+                </RecordCard>
+              ))}
+            </RecordList>
+
             {pagination.totalPages > 1 && (
               <div className={styles.pagination}>
                 <Button variant="secondary" size="sm" disabled={pagination.page <= 1} onClick={() => fetchNotices(pagination.page - 1)}><ChevronLeft size={14} /> Previous</Button>

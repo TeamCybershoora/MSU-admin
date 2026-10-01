@@ -138,6 +138,46 @@
   color: var(--accent);
 }
 
+/* ── Collapsible nav group (Enquiry Management) ─────
+   Built from the existing .navItem styles so the parent and its children
+   sit in the same visual system; only the indent/chevron are new.
+   ──────────────────────────────────────────────────── */
+
+.navGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.navChevron {
+  margin-left: auto;
+  transition: transform 0.15s ease;
+}
+
+.navChevronOpen {
+  transform: rotate(90deg);
+}
+
+.navSubList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 2px 0 2px 1.05rem;
+  padding-left: 0.55rem;
+  border-left: 1.5px solid rgba(21, 97, 109, 0.14);
+}
+
+.navSubItem {
+  font-size: 0.82rem;
+  gap: 8px;
+  padding: 0.5rem 0.7rem;
+}
+
+.navSubItem svg {
+  width: 15px;
+  height: 15px;
+}
+
 /* ── Sidebar Footer ─────────────────────────────────────── */
 
 .sidebarFooter {
@@ -190,6 +230,13 @@
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+
+  /* CRITICAL for small screens: a flex item defaults to `min-width: auto`,
+     so wide page content (data tables) would stretch this column past the
+     viewport instead of letting the table wrapper scroll — the right-hand
+     side of every table page was being cut off. Allowing the column to
+     shrink lets `.tableWrapper { overflow-x: auto }` do its job. */
+  min-width: 0;
 }
 
 .header {
@@ -209,6 +256,8 @@
   display: flex;
   align-items: center;
   gap: 1rem;
+  min-width: 0;
+  flex: 1;
 }
 
 .menuBtn {
@@ -222,6 +271,7 @@
   background: transparent;
   color: var(--foreground);
   cursor: pointer;
+  flex-shrink: 0;
 }
 
 .menuBtn svg {
@@ -235,17 +285,26 @@
   font-weight: 700;
   color: var(--foreground);
   margin: 0;
+  /* Long page names (e.g. "College Registration Enquiries") must truncate
+     rather than push the header wider than the viewport on phones. */
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .headerRight {
   display: flex;
   align-items: center;
   gap: 0.75rem;
+  flex-shrink: 0;
 }
 
 .content {
   flex: 1;
   padding: 1.5rem 2rem 2rem;
+  /* Same reason as .main — keep wide children from widening the page. */
+  min-width: 0;
 }
 
 /* ── Mobile Overlay ─────────────────────────────────────── */
@@ -283,11 +342,31 @@
   color: #ff8a80;
 }
 
+:global(html.dark) .navSubList {
+  border-left-color: rgba(255, 255, 255, 0.1);
+}
+
 /* ── Responsive ─────────────────────────────────────── */
 
 @media (max-width: 900px) {
   .sidebar {
     transform: translateX(-100%);
+
+    /* OPAQUE DRAWER: on mobile the page content sits BEHIND the sidebar, so
+       the desktop frosted-glass treatment (translucent white + blur) would
+       let the content show through and make the menu unreadable. Solid theme
+       surface only — dimming belongs to the .overlay below the drawer. */
+    background: var(--card);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    border-right-color: rgba(21, 97, 109, 0.14);
+    box-shadow: 12px 0 32px rgba(0, 0, 0, 0.18);
+  }
+
+  :global(html.dark) .sidebar {
+    background: var(--card);
+    border-right-color: rgba(255, 255, 255, 0.08);
+    box-shadow: 12px 0 32px rgba(0, 0, 0, 0.45);
   }
 
   .sidebarOpen {
@@ -312,6 +391,7 @@
 
   .header {
     padding: 0.75rem 1rem;
+    gap: 0.5rem;
   }
 }
 

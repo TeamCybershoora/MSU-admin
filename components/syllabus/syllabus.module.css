@@ -324,7 +324,105 @@
   text-align: center;
 }
 
+/* ── Read-only academic metadata (from Academic Structure) ───────── */
+
+.readonlyMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.7rem 0.85rem;
+  border-radius: 10px;
+  background: rgba(21, 97, 109, 0.05);
+  border: 1px solid rgba(21, 97, 109, 0.12);
+}
+
+.readonlyMetaRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-size: 0.85rem;
+  color: var(--foreground);
+}
+
+.readonlyMetaLabel {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--foreground) 45%, var(--muted));
+}
+
+/* ── Legacy (session-less) documents ─────────────────────────── */
+
+.legacyBlock {
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px dashed rgba(21, 97, 109, 0.18);
+}
+
+.legacyList {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.legacyList li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  font-size: 0.85rem;
+  padding: 0.45rem 0.6rem;
+  border-radius: 8px;
+  background: rgba(21, 97, 109, 0.03);
+  border: 1px solid rgba(21, 97, 109, 0.08);
+}
+
+/* ── "Academic Structure not configured yet" state ─────────────── */
+
+.structureMissing {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.6rem;
+  padding: 0.8rem 0.9rem;
+  border-radius: 10px;
+  background: rgba(224, 122, 82, 0.08);
+  border: 1px solid rgba(224, 122, 82, 0.25);
+}
+
+.structureMissing p {
+  margin: 0;
+  font-size: 0.83rem;
+  line-height: 1.5;
+  color: var(--foreground);
+}
+
+/* ── Subject PDF actions (per-subject document control) ───────────── */
+
+.subjectPdfActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.subjectPdfHint {
+  font-size: 0.76rem;
+  color: color-mix(in srgb, var(--foreground) 45%, var(--muted));
+}
+
 /* ── Dark mode ─────────────────────────────────────── */
+
+:global(html.dark) .structureMissing {
+  background: rgba(224, 122, 82, 0.16);
+  border-color: rgba(224, 122, 82, 0.35);
+}
 
 :global(html.dark) .subjectRow {
   background: rgba(255, 255, 255, 0.03);
@@ -355,4 +453,14 @@
 :global(html.dark) .subjectRowInput input {
   background: rgba(255, 255, 255, 0.04);
   border-color: rgba(255, 255, 255, 0.08);
+}
+
+:global(html.dark) .readonlyMeta,
+:global(html.dark) .legacyList li {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+:global(html.dark) .legacyBlock {
+  border-top-color: rgba(255, 255, 255, 0.12);
 }

@@ -1,42 +1,74 @@
 "use client";
 
 /**
- * SyllabusSemesterForm — add a new semester, or edit an existing one.
+ * SyllabusSemesterForm — add a semester document, or edit an existing one.
  *
- * Reused for every programme: it only needs a programme identifier (or a
- * record to edit), so BCA and B.Tech share one implementation.
+ * The academic identity is chosen from Academic Structure, never typed:
  *
- *   create → programme + semester + the initial subjects (+ optional PDF)
- *   edit   → renumber the semester and manage its semester-level PDF
- *            (View / Replace / Remove). Subjects of an existing semester are
- *            managed individually from the semester card, so an edit can never
- *            overwrite unrelated subjects by accident.
+ *   Programme  →  Academic Session  →  Semester
+ *
+ * The programme and the academic session are TWO separate searchable selectors
+ * (SearchableSelect), so the administrator can type a programme code (BCA) or a
+ * programme name while the session list stays scoped to the chosen programme.
+ * Only a real structure may be selected — typed text alone is never a value.
+ *
+ * When the programme changes, the previously chosen session and semester are
+ * cleared and the session list is rebuilt for the new programme; when the
+ * session changes, the semester (and its dependent document identity) is
+ * cleared. This makes it impossible to submit a programme/session combination
+ * that does not exist or to keep a session that is not valid for the new
+ * programme.
+ *
+ * Only EFFECTIVELY ACTIVE structures and semesters can be selected for a new
+ * upload (see lib/programme-structure effectiveStatus). In EDIT mode the
+ * identity is fixed; only the semester number (a renumber inside the same
+ * structure) and the semester-level PDF can change.
+ *
+ * The subject list of a semester document is managed per subject from the
+ * semester card, so an edit here can never overwrite unrelated subjects.
  *
  * PDF bytes are stored through the shared uploadSyllabusPdf helper; the parent
  * persists the reference with the generic create/update API call.
  */
 
-import { useEffect, useRef, useState } from "react";
-import { Plus } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import Modal, { ModalScrollable } from "@/components/ui/modal";
 import Button from "@/components/ui/button";
+import SearchableSelect from "@/components/ui/searchable-select";
 import PdfAttachmentField from "./pdf-attachment-field";
+import AddStructureModal, {
+  type AddStructurePrefill,
+} from "./add-structure-modal";
 import {
-  isHttpUrl,
   readUploadedPdf,
   uploadSyllabusPdf,
   validatePdfFile,
   type ApiOutcome,
+  type CatalogueProgramme,
 } from "./syllabus-api";
-import { emptySubject, type SyllabusRecord, type SyllabusSubject } from "./types";
+import { identityLabel, type SyllabusRecord } from "./types";
+import { fetchProgrammeStructure } from "@/components/academic-structure/academic-structure-api";
+import { effectiveStatus } from "@/lib/programme-structure";
+import {
+  buildProgrammeOptions,
+  buildSessionOptions,
+  findStructure,
+  sameProgramme,
+} from "./programme-options";
+import {
+  semesterLabel,
+  type CurriculumSemester,
+  type ProgrammeStructureRecord,
+  type ProgrammeStructureSummary,
+} from "@/components/academic-structure/types";
 import styles from "./syllabus.module.css";
 
 /** Values handed to the parent, which performs the actual API call. */
 export interface SemesterFormValues {
   programme: string;
+  academicSession: string;
   semester: number;
-  /** Present in create mode only. */
-  subjects?: SyllabusSubject[];
   /** `undefined` = leave the existing attachment untouched. */
   pdfUrl?: string | null;
   pdfName?: string | null;
@@ -45,62 +77,75 @@ export interface SemesterFormValues {
 interface SyllabusSemesterFormProps {
   open: boolean;
   mode: "create" | "edit";
-  /** Semester being edited (edit mode). */
+  /** Semester document being edited (edit mode). */
   record: SyllabusRecord | null;
-  /** Pre-filled programme for a new semester (create mode). */
-  defaultProgramme?: string;
-  /** Known programme codes, offered as suggestions. */
-  programmes?: string[];
+  /** Academic structures offered as the identity selector. */
+  structures: ProgrammeStructureSummary[];
+  /** The existing programme catalogue (public discovery), unioned with `structures`. */
+  catalogue?: CatalogueProgramme[];
+  /** Structure list loading / error state, surfaced inside the selectors. */
+  structuresLoading?: boolean;
+  structuresError?: string;
+  onRetryStructures?: () => void;
+  /** Reload the shared structure list after an explicit create. */
+  onRefreshStructures?: () => Promise<void> | void;
   onClose: () => void;
   onSave: (values: SemesterFormValues) => Promise<ApiOutcome>;
 }
-
-const SEMESTER_OPTIONS = Array.from({ length: 12 }, (_, i) => i + 1);
 
 export default function SyllabusSemesterForm({
   open,
   mode,
   record,
-  defaultProgramme = "",
-  programmes = [],
+  structures,
+  catalogue = [],
+  structuresLoading = false,
+  structuresError = "",
+  onRetryStructures,
+  onRefreshStructures,
   onClose,
   onSave,
 }: SyllabusSemesterFormProps) {
+  const router = useRouter();
   const [programme, setProgramme] = useState("");
-  const [semester, setSemester] = useState("1");
-  const [subjects, setSubjects] = useState<SyllabusSubject[]>([emptySubject()]);
+  const [session, setSession] = useState("");
+  const [detail, setDetail] = useState<ProgrammeStructureRecord | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState("");
+  const [semester, setSemester] = useState("");
   const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [pdfCleared, setPdfCleared] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
+  // The explicit create step behind "+ Add New Programme" / "+ Add New
+  // Academic Session" — null when no create form is open.
+  const [structureModal, setStructureModal] = useState<{
+    prefill: AddStructurePrefill;
+    lockProgramme: boolean;
+  } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Reset the form whenever it is opened, or the record/mode changes.
-  //
-  // Adjusted during render rather than in an effect: the reset is derived purely
-  // from props, so React can apply it in the same render pass instead of
-  // committing a throwaway render first. `resetFor` only changes when the parent
-  // changes the modal's open state, record or mode, so this converges immediately
-  // and cannot loop.
+  // Reset the form whenever it is opened, or the record/mode changes — derived
+  // purely from props, so it is adjusted during render rather than in an effect.
   const [resetFor, setResetFor] = useState<{
     open: boolean;
     mode: "create" | "edit";
     record: SyllabusRecord | null;
-    defaultProgramme: string;
-  }>({ open, mode, record, defaultProgramme });
+  }>({ open, mode, record });
 
   if (
     resetFor.open !== open ||
     resetFor.mode !== mode ||
-    resetFor.record !== record ||
-    resetFor.defaultProgramme !== defaultProgramme
+    resetFor.record !== record
   ) {
-    setResetFor({ open, mode, record, defaultProgramme });
+    setResetFor({ open, mode, record });
     if (open) {
-      setProgramme(mode === "edit" ? record?.programme ?? "" : defaultProgramme);
-      setSemester(String(mode === "edit" ? record?.semester ?? 1 : 1));
-      setSubjects([emptySubject()]);
+      setProgramme(record?.programme ?? "");
+      setSession(record?.academicSession ?? "");
+      setDetail(null);
+      setDetailError("");
+      setSemester(record ? String(record.semester) : "");
       setPdfFile(null);
       setPdfCleared(false);
       setSubmitting(false);
@@ -109,16 +154,170 @@ export default function SyllabusSemesterForm({
     }
   }
 
-  // Clear the file input element itself on the same trigger. This touches only
-  // the DOM and never updates state, so it is not a state update in an effect.
+  // Programmes offered by the selector: the existing catalogue UNION the real
+  // structures, so a catalogue-only programme stays selectable and can show the
+  // "not configured" state instead of being hidden.
+  const programmeOptions = useMemo(
+    () => buildProgrammeOptions(structures, catalogue),
+    [structures, catalogue]
+  );
+
+  // Academic sessions available FOR THE SELECTED PROGRAMME, newest first.
+  const sessionOptions = useMemo(
+    () => buildSessionOptions(structures, programme),
+    [structures, programme]
+  );
+
+  // The structure selected by the (programme, session) pair — the ONE identity
+  // the document will be attached to.
+  const selectedStructure = useMemo(
+    () => findStructure(structures, programme, session),
+    [structures, programme, session]
+  );
+  const structureId = selectedStructure?.id ?? "";
+
+  // A programme is selected but has NO structure at all: it exists in the
+  // catalogue yet its academic structure was never configured. This is the one
+  // honest state — no session is invented and no document can be attached.
+  const structureNotConfigured =
+    !!programme &&
+    !structuresLoading &&
+    !structuresError &&
+    sessionOptions.length === 0;
+
+  /** Name of a programme from whichever source knows it ('' when unknown). */
+  function programmeNameOf(code: string): string {
+    return (
+      catalogue.find((entry) => sameProgramme(entry.programmeCode, code))
+        ?.programmeName ??
+      structures.find((structure) => sameProgramme(structure.programmeCode, code))
+        ?.programmeName ??
+      ""
+    );
+  }
+
+  // Load the selected structure's curriculum (semesters) for the selector.
+  // setState happens in the promise callback, not synchronously in the effect.
+  useEffect(() => {
+    if (!open || !structureId) return;
+    let cancelled = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setDetailLoading(true);
+    setDetailError("");
+
+    fetchProgrammeStructure(structureId)
+      .then((loaded) => {
+        if (cancelled) return;
+        setDetail(loaded);
+        setDetailLoading(false);
+        if (!loaded) {
+          setDetailError("Unable to load this academic structure.");
+          return;
+        }
+        // In create mode, default to the first selectable semester.
+        if (mode === "create") {
+          const first = selectableSemesters(loaded)[0];
+          setSemester(first ? String(first.semesterNumber) : "");
+        }
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setDetail(null);
+        setDetailLoading(false);
+        setDetailError("Unable to load this academic structure.");
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open, structureId, mode]);
+
+  // Keep the raw file input element in sync when the modal is re-opened.
   useEffect(() => {
     if (!open) return;
     if (fileInputRef.current) fileInputRef.current.value = "";
-  }, [open, mode, record, defaultProgramme]);
+  }, [open, mode, record]);
 
   const isCreate = mode === "create";
   const currentPdfUrl = pdfCleared ? null : record?.pdfUrl ?? null;
   const currentPdfName = pdfCleared ? null : record?.pdfName ?? null;
+
+  const structureActive = detail?.status === "ACTIVE";
+  // Editing an EXISTING document of an INACTIVE structure: no new upload, but
+  // the existing attachment can still be cleared.
+  const uploadBlocked =
+    !isCreate && detail !== null && detail.status === "INACTIVE";
+
+  const semesterOptions = detail
+    ? isCreate
+      ? selectableSemesters(detail)
+      : allSemesters(detail)
+    : [];
+
+  /** Changing the programme invalidates the session and everything below it. */
+  function handleProgrammeChange(value: string) {
+    setProgramme(value);
+    setSession("");
+    setDetail(null);
+    setDetailError("");
+    setSemester("");
+    setError("");
+  }
+
+  /** Changing the session invalidates the semester and the document identity. */
+  function handleSessionChange(value: string) {
+    setSession(value);
+    setDetail(null);
+    setDetailError("");
+    setSemester("");
+    setError("");
+  }
+
+  /**
+   * "+ Add New Programme": open the EXISTING Academic Structure create form,
+   * prefilled with the code the administrator typed. The programme code is
+   * only committed when that form is submitted.
+   */
+  function openAddProgramme(query: string) {
+    setStructureModal({
+      prefill: {
+        programmeCode: query.trim().toUpperCase(),
+        programmeName: "",
+        academicSession: "",
+      },
+      lockProgramme: false,
+    });
+  }
+
+  /**
+   * "+ Add New Academic Session": open the same existing create form, but locked
+   * to the programme already selected, so the new session can only belong to it.
+   */
+  function openAddSession() {
+    if (!programme) return;
+    setStructureModal({
+      prefill: {
+        programmeCode: programme,
+        programmeName: programmeNameOf(programme),
+        academicSession: "",
+      },
+      lockProgramme: true,
+    });
+  }
+
+  /** The create form succeeded and the shared list has been refreshed. */
+  function handleStructureCreated(created: {
+    programmeCode: string;
+    academicSession: string;
+  }) {
+    setStructureModal(null);
+    setProgramme(created.programmeCode);
+    setSession(created.academicSession);
+    setDetail(null);
+    setDetailError("");
+    setSemester("");
+    setError("");
+  }
 
   function choosePdf() {
     fileInputRef.current?.click();
@@ -151,57 +350,37 @@ export default function SyllabusSemesterForm({
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
-  // ── Create-mode subject rows ─────────────────────────────────────
-
-  function addSubjectRow() {
-    setSubjects((prev) => [...prev, emptySubject()]);
-  }
-
-  function removeSubjectRow(index: number) {
-    setSubjects((prev) => prev.filter((_, i) => i !== index));
-  }
-
-  function updateSubjectRow(
-    index: number,
-    field: keyof SyllabusSubject,
-    value: string
-  ) {
-    setSubjects((prev) =>
-      prev.map((s, i) => (i === index ? { ...s, [field]: value || null } : s))
-    );
-  }
-
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (submitting) return;
 
-    const code = programme.trim().toUpperCase();
-    if (!code) {
-      setError("Programme is required.");
+    if (!programme) {
+      setError("Select a programme.");
+      return;
+    }
+    if (!session) {
+      setError("Select an academic session.");
+      return;
+    }
+    if (!selectedStructure) {
+      setError(
+        "The selected programme and academic session do not match an academic structure."
+      );
       return;
     }
 
-    let validSubjects: SyllabusSubject[] | undefined;
-    if (isCreate) {
-      validSubjects = subjects.filter(
-        (s) => s.subjectCode.trim() && s.subjectName.trim()
+    // Editing a legacy (session-less) record is not supported here.
+    if (isCreate && !structureActive) {
+      setError(
+        "This academic structure is INACTIVE and cannot be selected for a new upload."
       );
+      return;
+    }
 
-      if (validSubjects.length === 0) {
-        setError("At least one subject with a code and name is required.");
-        return;
-      }
-
-      for (const s of validSubjects) {
-        if (s.syllabusUrl && !isHttpUrl(s.syllabusUrl)) {
-          setError(`Subject ${s.subjectCode}: syllabus URL must be a valid http(s) link.`);
-          return;
-        }
-        if (s.pdfUrl && !isHttpUrl(s.pdfUrl)) {
-          setError(`Subject ${s.subjectCode}: PDF URL must be a valid http(s) link.`);
-          return;
-        }
-      }
+    const semesterNumber = Number(semester);
+    if (!semesterNumber) {
+      setError("Select a semester.");
+      return;
     }
 
     setSubmitting(true);
@@ -232,9 +411,9 @@ export default function SyllabusSemesterForm({
     }
 
     const outcome = await onSave({
-      programme: code,
-      semester: Number(semester),
-      ...(isCreate ? { subjects: validSubjects } : {}),
+      programme: selectedStructure.programmeCode,
+      academicSession: selectedStructure.academicSession,
+      semester: semesterNumber,
       pdfUrl,
       pdfName,
     });
@@ -245,12 +424,14 @@ export default function SyllabusSemesterForm({
   }
 
   return (
+    <>
     <Modal
       open={open}
       onClose={() => {
-        if (!submitting) onClose();
+        // While the explicit create step is open, Escape/overlay belong to it.
+        if (!submitting && !structureModal) onClose();
       }}
-      maxWidth={600}
+      maxWidth={560}
     >
       <form onSubmit={handleSubmit}>
         <ModalScrollable>
@@ -258,60 +439,121 @@ export default function SyllabusSemesterForm({
             {isCreate ? "Add Semester" : "Edit Semester"}
           </h3>
           <p className={styles.modalDesc}>
-            {isCreate
-              ? "Create a semester syllabus with its subjects."
-              : `${record?.programme ?? ""} — Semester ${record?.semester ?? ""}`}
+            {record
+              ? `${identityLabel(record.programme, record.academicSession)} — Semester ${record.semester}`
+              : "Attach a semester-level PDF to an existing academic structure."}
           </p>
 
           <div className={styles.formFields}>
-            {isCreate && (
-              <div className={styles.formField}>
-                <label htmlFor="semester-programme">Programme *</label>
-                <input
-                  id="semester-programme"
-                  type="text"
-                  list="semester-programme-options"
-                  placeholder="e.g. BCA"
-                  value={programme}
-                  onChange={(e) => setProgramme(e.target.value)}
-                  disabled={submitting}
-                  required
-                />
-                <datalist id="semester-programme-options">
-                  {programmes.map((p) => (
-                    <option key={p} value={p} />
-                  ))}
-                </datalist>
+            <SearchableSelect
+              id="semester-programme"
+              label="Course / Programme"
+              required
+              placeholder="Select a programme…"
+              searchPlaceholder="Type a code (BCA) or name…"
+              emptyMessage="No programmes are defined yet. Create one in Academic Structure first."
+              noResultsMessage="No programme matches your search."
+              value={programme}
+              options={programmeOptions}
+              onChange={handleProgrammeChange}
+              disabled={submitting || !isCreate}
+              loading={structuresLoading}
+              error={structuresError}
+              onRetry={onRetryStructures}
+              hint="Search the MSU programme catalogue. Academic details are managed in Academic Structure."
+              footerAction={
+                isCreate
+                  ? {
+                      label: "Add New Programme",
+                      onClick: openAddProgramme,
+                    }
+                  : undefined
+              }
+            />
+
+            <SearchableSelect
+              id="semester-session"
+              label="Academic Session"
+              required
+              placeholder={
+                programme ? "Select an academic session…" : "Select a programme first"
+              }
+              searchPlaceholder="Type a session (2023-24)…"
+              emptyMessage={
+                programme
+                  ? "This programme has no academic sessions defined yet."
+                  : "Select a programme first."
+              }
+              noResultsMessage="No academic session matches your search."
+              value={session}
+              options={sessionOptions}
+              onChange={handleSessionChange}
+              disabled={submitting || !isCreate || !programme}
+              footerAction={
+                isCreate && programme
+                  ? {
+                      label: "Add New Academic Session",
+                      onClick: openAddSession,
+                    }
+                  : undefined
+              }
+            />
+
+            {isCreate && structureNotConfigured && (
+              <div className={styles.structureMissing} role="note">
+                <p>
+                  <strong>{programme}</strong> exists in the programme catalogue,
+                  but its academic structure has not been configured yet, so no
+                  academic session can be chosen. Semesters and subjects are
+                  defined in Academic Structure and are never invented here.
+                </p>
+                <Button
+                  type="button"
+                  variant="primary"
+                  size="sm"
+                  onClick={() => router.push("/admin/academic-structure")}
+                >
+                  Configure Academic Structure
+                </Button>
               </div>
             )}
 
             <div className={styles.formField}>
-              <label htmlFor="semester-number">
-                {isCreate ? "Semester *" : "Semester number"}
-              </label>
+              <label htmlFor="semester-number">Semester *</label>
               <select
                 id="semester-number"
                 value={semester}
                 onChange={(e) => setSemester(e.target.value)}
-                disabled={submitting}
+                disabled={submitting || !detail || detailLoading}
+                required
               >
-                {SEMESTER_OPTIONS.map((n) => (
-                  <option key={n} value={n}>
-                    {n}
+                <option value="">
+                  {detailLoading
+                    ? "Loading semesters…"
+                    : detail
+                      ? "Select a semester…"
+                      : "Select a programme and academic session first"}
+                </option>
+                {semesterOptions.map((s) => (
+                  <option key={s.semesterNumber} value={s.semesterNumber}>
+                    {semesterLabel(s)}
                   </option>
                 ))}
               </select>
-              {!isCreate && (
-                <span className={styles.formHint}>
-                  Changing this renumbers the semester; other semesters are not
-                  affected.
+              {detailError ? (
+                <span className={styles.formHint} role="alert">
+                  {detailError}
                 </span>
+              ) : (
+                displaySemesterHelp(detail, isCreate, semesterOptions.length)
               )}
             </div>
 
             <div className={styles.formField}>
               <label>
-                {isCreate ? "Semester Syllabus PDF (optional)" : "Semester Syllabus PDF"}
+                {isCreate
+                  ? "Semester Syllabus PDF (optional)"
+                  : "Semester Syllabus PDF"}
               </label>
               <PdfAttachmentField
                 currentUrl={currentPdfUrl}
@@ -326,11 +568,18 @@ export default function SyllabusSemesterForm({
                 chooseLabel="Choose PDF"
                 uploading={uploading}
                 disabled={submitting}
+                disableUpload={uploadBlocked}
                 allowRemove={!isCreate}
                 onChoose={choosePdf}
                 onCancelSelection={cancelPdfSelection}
                 onRemove={removeAttachedPdf}
               />
+              {uploadBlocked && (
+                <span className={styles.formHint} role="note">
+                  This academic structure is INACTIVE, so a new upload is not
+                  offered. The attached PDF can still be removed.
+                </span>
+              )}
               <input
                 ref={fileInputRef}
                 type="file"
@@ -339,63 +588,6 @@ export default function SyllabusSemesterForm({
                 onChange={handlePdfSelected}
               />
             </div>
-
-            {isCreate ? (
-              <>
-                <div className={styles.inlineHeader}>
-                  <label>Subjects *</label>
-                  <Button
-                    type="button"
-                    variant="teal"
-                    size="sm"
-                    onClick={addSubjectRow}
-                    disabled={submitting}
-                  >
-                    <Plus size={14} /> Add
-                  </Button>
-                </div>
-                {subjects.map((subject, index) => (
-                  <div key={index} className={styles.subjectRowInput}>
-                    <input
-                      type="text"
-                      placeholder="Code"
-                      value={subject.subjectCode}
-                      onChange={(e) =>
-                        updateSubjectRow(index, "subjectCode", e.target.value)
-                      }
-                      disabled={submitting}
-                    />
-                    <input
-                      type="text"
-                      placeholder="Name"
-                      value={subject.subjectName}
-                      onChange={(e) =>
-                        updateSubjectRow(index, "subjectName", e.target.value)
-                      }
-                      disabled={submitting}
-                    />
-                    {subjects.length > 1 && (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        iconOnly
-                        title="Remove subject"
-                        onClick={() => removeSubjectRow(index)}
-                        disabled={submitting}
-                      >
-                        ×
-                      </Button>
-                    )}
-                  </div>
-                ))}
-              </>
-            ) : (
-              <p className={styles.formHint}>
-                Subjects are edited individually from the semester card’s Edit and
-                Delete actions.
-              </p>
-            )}
           </div>
 
           {error && <p className={styles.formError}>{error}</p>}
@@ -411,10 +603,69 @@ export default function SyllabusSemesterForm({
             Cancel
           </Button>
           <Button type="submit" variant="primary" loading={submitting}>
-            {uploading ? "Uploading…" : isCreate ? "Create Semester" : "Save Changes"}
+            {uploading
+              ? "Uploading…"
+              : isCreate
+                ? "Create Semester"
+                : "Save Changes"}
           </Button>
         </div>
       </form>
     </Modal>
+
+    {/* The EXPLICIT create step — reuses the existing Academic Structure form
+        and API. Rendered as a SIBLING so it is never clipped by (or nested
+        inside) the semester dialog. Nothing is created unless it is submitted. */}
+    <AddStructureModal
+      open={!!structureModal}
+      prefill={
+        structureModal?.prefill ?? {
+          programmeCode: "",
+          programmeName: "",
+          academicSession: "",
+        }
+      }
+      lockProgramme={structureModal?.lockProgramme ?? false}
+      onClose={() => setStructureModal(null)}
+      onRefresh={() => onRefreshStructures?.()}
+      onCreated={handleStructureCreated}
+    />
+    </>
   );
+}
+
+/** Semesters offered for a new document: effectively active only. */
+function selectableSemesters(
+  source: ProgrammeStructureRecord
+): CurriculumSemester[] {
+  return [...(source.semesters ?? [])]
+    .sort((a, b) => a.semesterNumber - b.semesterNumber)
+    .filter((s) => effectiveStatus(source.status, s.status) === "ACTIVE");
+}
+
+/** All semesters of the structure (used for a renumber in edit mode). */
+function allSemesters(source: ProgrammeStructureRecord): CurriculumSemester[] {
+  return [...(source.semesters ?? [])].sort(
+    (a, b) => a.semesterNumber - b.semesterNumber
+  );
+}
+
+/** Contextual help under the semester selector. */
+function displaySemesterHelp(
+  detail: ProgrammeStructureRecord | null,
+  isCreate: boolean,
+  optionCount: number
+) {
+  if (!detail) return null;
+
+  if (optionCount === 0) {
+    return (
+      <span className={styles.formHint}>
+        This structure has no {isCreate ? "active " : ""}semesters defined yet.
+        Add them in Academic Structure first.
+      </span>
+    );
+  }
+
+  return null;
 }

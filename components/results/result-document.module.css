@@ -1,0 +1,498 @@
+/* ==========================================================================
+   ResultDocument — official MSU Statement of Marks.
+
+   The document is one fixed A4 sheet (210 x 297 mm) whose four sides are the
+   ornamental frame from `components/results/ornamental-frame.tsx`. Everything
+   inside reads as a printed university record:
+
+     white paper · ornamental frame · centred crest + identity · ruled tables
+     · one shared content margin · faint crest watermark · formal footer
+
+   Deliberately absent: statistic cards, rounded panels, shadows, gradients,
+   hover states and dashboard widgets. A printed marksheet has none of them.
+
+   Page geometry lives in two custom properties so the same layout can be
+   re-expressed without touching the frame component:
+
+     --doc-w   page width  (also the length of the horizontal frame bands)
+     --doc-h   page height (also the length of the vertical frame bands)
+   ========================================================================== */
+
+.document {
+  /* True A4. Expressed in millimetres so the on-screen page and the printed
+     page are the same physical size; 210mm == 794px at 96dpi. */
+  --doc-w: 210mm;
+  --doc-h: 297mm;
+
+  /* Restrained official palette: navy-black ink on white, warm gold/cream
+     accents that belong to the ornament in public/border.png. */
+  --msu-ink: #1e2733;
+  --msu-heading: #232c38;
+  --msu-muted: #6f6656;
+  --msu-rule: #d8c7a4;
+  --msu-rule-strong: #bda172;
+  --msu-gold: #9c7526;
+  --msu-cream: #faf5e9;
+  --msu-cream-soft: #fdfbf5;
+  --msu-paper: #ffffff;
+
+  width: var(--doc-w);
+  height: var(--doc-h);
+  background: var(--msu-paper);
+  color: var(--msu-ink);
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  font-size: 10.5px;
+  line-height: 1.4;
+
+  /* The frame is coloured artwork — keep it coloured when printing. */
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}
+
+.frame {
+  font-size: 10.5px;
+  color: var(--msu-ink);
+}
+
+/* ── Watermark: the university crest, never text ──────────────────── */
+
+.watermark {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 0;
+  /* A square box keeps the crest's own proportions whatever the source
+     aspect is: `object-fit: contain` scale-to-fits inside it, so the artwork
+     is never stretched, squashed or cropped. */
+  width: 44%;
+  aspect-ratio: 1 / 1;
+  object-fit: contain;
+  opacity: 0.07; /* deliberately at the faint end of the 0.04–0.08 range */
+  pointer-events: none;
+  user-select: none;
+  /* The crest file sits on an opaque white field; multiply drops that field so
+     only the emblem itself tints the paper, like a real document watermark. */
+  mix-blend-mode: multiply;
+}
+
+/* ── Content ──────────────────────────────────────────────────────── */
+
+.content {
+  position: relative;
+  /* Content sits ABOVE the watermark (0) and below nothing else. */
+  z-index: 1;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  /* Clears the frame completely: band + gutter, on all four sides. Every
+     section shares this single left/right boundary. */
+  padding: calc(var(--msu-band) + 9px) calc(var(--msu-band) + 14px);
+}
+
+/* ── Header: crest · identity · optional QR ───────────────────────── */
+
+.header {
+  display: grid;
+  /*
+   * 1fr / auto / 1fr with the identity pinned to the middle column keeps the
+   * university identity optically centred whether or not the optional QR cell
+   * exists — and nothing has to be rendered to hold the balance.
+   */
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  column-gap: 12px;
+}
+
+.identity {
+  grid-column: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  min-width: 0;
+}
+
+.logo {
+  display: block;
+  width: 56px;
+  height: 56px;
+  object-fit: contain;
+  /* Same trick as the watermark: the crest's opaque white field disappears
+     against the paper instead of printing as a pale square. */
+  mix-blend-mode: multiply;
+}
+
+.university {
+  margin: 5px 0 0;
+  font-family: var(--font-playfair), Georgia, "Times New Roman", serif;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.055em;
+  text-transform: uppercase;
+  color: var(--msu-heading);
+}
+
+.place {
+  margin: 3px 0 0;
+  font-size: 8.5px;
+  letter-spacing: 0.19em;
+  text-transform: uppercase;
+  color: var(--msu-muted);
+}
+
+.qrCell {
+  grid-column: 3;
+  justify-self: end;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+
+.qr {
+  display: block;
+  width: 64px;
+  height: 64px;
+  padding: 2px;
+  background: #fff;
+  border: 1px solid var(--msu-rule);
+}
+
+.qrLabel {
+  font-size: 7px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--msu-muted);
+}
+
+/* Thin formal separator under the university identity. */
+
+.headerRule {
+  margin-top: 8px;
+  height: 4px;
+  border-top: 1px solid var(--msu-rule-strong);
+  border-bottom: 1px solid var(--msu-rule);
+}
+
+/* ── Document title ───────────────────────────────────────────────── */
+
+.titleBlock {
+  margin-top: 8px;
+  text-align: center;
+}
+
+.docTitle {
+  margin: 0;
+  font-family: var(--font-playfair), Georgia, "Times New Roman", serif;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: #241d12;
+}
+
+.titleRule {
+  display: block;
+  width: 168px;
+  height: 1px;
+  margin: 6px auto 0;
+  background: var(--msu-gold);
+}
+
+.docSubtitle {
+  margin: 6px 0 0;
+  font-size: 9.5px;
+  letter-spacing: 0.035em;
+  color: var(--msu-muted);
+}
+
+/* ── Sections ─────────────────────────────────────────────────────── */
+
+.section {
+  margin-top: 8px;
+}
+
+.sectionTitle {
+  margin: 0 0 4px;
+  padding-bottom: 2px;
+  border-bottom: 1px solid var(--msu-rule);
+  font-family: var(--font-playfair), Georgia, "Times New Roman", serif;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--msu-heading);
+}
+
+/* ── Candidate details: aligned label/value rows, not a form ──────── */
+
+.details {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 26px;
+  margin: 0;
+}
+
+.detailsRow {
+  display: grid;
+  grid-template-columns: 116px minmax(0, 1fr);
+  align-items: baseline;
+  column-gap: 8px;
+  padding: 1.5px 0;
+}
+
+.detailsLabel {
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--msu-muted);
+}
+
+.detailsValue {
+  margin: 0;
+  min-width: 0;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--msu-ink);
+  overflow-wrap: anywhere;
+}
+
+/* ── Ruled document tables ────────────────────────────────────────── */
+
+.dataTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 9.5px;
+}
+
+.dataTable th,
+.dataTable td {
+  border: 1px solid var(--msu-rule);
+  padding: 1.5px 7px;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.dataTable thead th {
+  background: var(--msu-cream);
+  color: #54432a;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.dataTable tbody tr:nth-child(even) {
+  background: var(--msu-cream-soft);
+}
+
+.numCell {
+  text-align: center;
+  white-space: nowrap;
+}
+
+.gradeCell {
+  text-align: center;
+  font-weight: 700;
+}
+
+.currentRow td {
+  background: #fbf3e2;
+  font-weight: 700;
+}
+
+/* Result tone — plain document text, no chips or panels. */
+
+.statusCell {
+  font-weight: 600;
+}
+
+.statusPass {
+  color: #2c5d3f;
+  font-weight: 700;
+}
+
+.statusFail {
+  color: #8f2222;
+  font-weight: 700;
+}
+
+.statusCompartment {
+  color: #8a5416;
+  font-weight: 700;
+}
+
+/* ── Academic summary: one figures table, never dashboard cards ───── */
+
+.academicTable thead th {
+  text-align: center;
+  white-space: nowrap;
+}
+
+.academicTable tbody td {
+  text-align: center;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.015em;
+  white-space: nowrap;
+}
+
+.remarks {
+  margin: 6px 0 0;
+  font-size: 8.5px;
+  line-height: 1.5;
+  color: #6b6252;
+}
+
+.remarksLabel {
+  font-weight: 700;
+  color: var(--msu-heading);
+}
+
+/* ── Grade scale: two half-height legends side by side ────────────── */
+
+.gradeColumns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 10px;
+}
+
+.gradeTable th,
+.gradeTable td {
+  padding: 1px 6px;
+}
+
+/* ── Notes / disclaimer ───────────────────────────────────────────── */
+
+/*
+ * The disclaimer + footer travel together and are pushed to the foot of the
+ * sheet by the auto margin, so the unused height collects ABOVE the closing
+ * block and every statement ends with its formal footer in the same place.
+ */
+.closing {
+  margin-top: auto;
+  padding-top: 8px;
+}
+
+.notes {
+  padding-top: 5px;
+  border-top: 1px solid var(--msu-rule);
+  font-size: 8.5px;
+  line-height: 1.55;
+  color: #6b6252;
+}
+
+.notes p {
+  margin: 0 0 3px;
+}
+
+.notes p:last-child {
+  margin-bottom: 0;
+}
+
+.notes strong {
+  color: var(--msu-heading);
+}
+
+/* ── Footer ───────────────────────────────────────────────────────── */
+
+.footer {
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid var(--msu-rule);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 8px;
+  letter-spacing: 0.045em;
+  color: var(--msu-muted);
+}
+
+.footerGroup {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.footerNote {
+  text-align: right;
+}
+
+/*
+ * Final-semester entry point to the Full Degree Result.
+ *
+ * It lives in the footer so it costs no extra page height, and it is hidden
+ * for print — the printed statement must contain no screen affordances.
+ */
+.degreeButton {
+  padding: 2px 9px;
+  border: 1px solid var(--msu-rule-strong);
+  background: var(--msu-cream);
+  color: #6b4a16;
+  font: inherit;
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+
+/* ==========================================================================
+   Print
+   ========================================================================== */
+
+/*
+ * The document owns its own margins (the frame + `.content` gutter), so the
+ * paper margin is zero: the statement prints at true A4, edge to edge, exactly
+ * as it appears on screen.
+ */
+@page {
+  size: A4 portrait;
+  margin: 0;
+}
+
+@media print {
+  /* Hide the entire admin shell (layout, tables, modal chrome) and print only
+     the statement. `visibility` is used rather than `display` so that no other
+     component needs to know where it sits in the tree. */
+  /* The app paints `html` with the theme background (a warm cream in light
+     mode). A printed statement must sit on plain paper, so both the root and
+     the body are forced white — and the dark theme is neutralised too. */
+  :global(html),
+  :global(html.dark) {
+    background: #fff !important;
+    color-scheme: light;
+  }
+
+  :global(body) {
+    visibility: hidden;
+    margin: 0;
+    background: #fff !important;
+  }
+
+  .document,
+  .document * {
+    visibility: visible;
+  }
+
+  /* Lift the page out of the (hidden) layout so it starts at the top of the
+     printed sheet. Requires components/ui/modal.module.css to drop its
+     `position: fixed` / `backdrop-filter` in print, which it does. */
+  .document {
+    position: fixed;
+    top: 0;
+    left: 0;
+    /* True A4 — identical to the on-screen geometry. */
+    --doc-w: 210mm;
+    --doc-h: 297mm;
+    box-shadow: none;
+  }
+
+  /* The Full Degree Result entry point is a screen affordance, not part of
+     the printed statement. */
+  .degreeButton {
+    display: none !important;
+  }
+}

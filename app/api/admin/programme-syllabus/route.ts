@@ -1,25 +1,29 @@
 /**
  * /api/admin/programme-syllabus
  *
- * Manages the ONE official programme-level syllabus PDF (e.g. the complete
- * "BCA Complete Syllabus 2026-27.pdf"), independent of any semester/subject
- * records. This is an additive layer on top of the existing per-semester
- * syllabus system and never touches those documents.
+ * Manages the ONE official programme-level syllabus PDF for an academic
+ * identity — a programme + academic session (Phase 2A).
  *
- *   GET    ?programme=BCA — list programme syllabus documents (all, or one)
- *   POST   { programme, pdfUrl, pdfName } — create/replace the programme PDF
- *   DELETE ?programme=BCA — remove the programme PDF (and its GridFS file)
+ *   GET    ?programme=BCA[&academicSession=2023-24] — list (all / one programme / one identity)
+ *   POST   { programme, academicSession, pdfUrl, pdfName } — create/replace
+ *   DELETE ?programme=BCA[&academicSession=2023-24] — remove (and its GridFS file)
+ *
+ * ProgrammeStructure is the source of truth for the programme: the identity is
+ * validated against a stored structure before a document is attached, and an
+ * INACTIVE structure cannot be selected for a new upload. Omitting
+ * `academicSession` addresses a LEGACY session-less document (never a guessed
+ * session).
  *
  * Backward compatibility:
- * - This route is new; no existing route or response was changed.
- * - No existing syllabus record is read, written or deleted here.
+ * - No existing syllabus semester/subject record is read, written or deleted here.
+ * - Legacy programme documents remain reachable and removable.
  *
  * Security (reuses the established syllabus controls):
  * - Admin JWT required (authenticateAdmin) for every method.
  * - Rate limited per IP.
- * - Only a URL previously issued by POST /api/admin/syllabus/upload is
- *   accepted (validated with parseSyllabusPdfId), never an arbitrary link.
- * - Responses expose only programme + public PDF URL/name.
+ * - Only a URL previously issued by POST /api/admin/syllabus/upload is accepted
+ *   (validated with parseSyllabusPdfId), never an arbitrary link.
+ * - Responses expose only programme + academic session + public PDF URL/name.
  *
  * Storage: PDF bytes are stored/replaced/removed through the existing
  * lib/pdf-storage.ts (MongoDB GridFS). No second storage mechanism is added.
@@ -33,6 +37,8 @@ import ProgrammeSyllabus, {
 import { authenticateAdmin } from "@/lib/admin-auth";
 import { createRateLimiter } from "@/lib/rate-limit";
 import { parseProgrammeCode, safePdfFilename } from "@/lib/validation";
+import { parseAcademicSession } from "@/lib/programme-structure";
+import { resolveStructure } from "@/lib/syllabus-academic";
 import { deleteSyllabusPdf, parseSyllabusPdfId } from "@/lib/pdf-storage";
 
 export const runtime = "nodejs";
@@ -43,15 +49,16 @@ const programmeSyllabusLimiter = createRateLimiter({
   limit: 60,
 });
 
+function fail(message: string, status = 400) {
+  return NextResponse.json({ success: false, message }, { status });
+}
+
 export async function GET(req: Request) {
   const auth = await authenticateAdmin(req);
   if ("error" in auth) return auth.error;
 
   if (programmeSyllabusLimiter.check(req)) {
-    return NextResponse.json(
-      { success: false, message: "Too many requests. Please try again later." },
-      { status: 429 }
-    );
+    return fail("Too many requests. Please try again later.", 429);
   }
 
   try {
@@ -59,21 +66,23 @@ export async function GET(req: Request) {
 
     const url = new URL(req.url);
     const programmeParam = url.searchParams.get("programme");
+    const sessionParam = url.searchParams.get("academicSession");
     const query: Record<string, unknown> = {};
 
     if (programmeParam !== null) {
       const programme = parseProgrammeCode(programmeParam);
-      if (!programme) {
-        return NextResponse.json(
-          { success: false, message: "Invalid programme." },
-          { status: 400 }
-        );
-      }
+      if (!programme) return fail("Invalid programme.");
       query.programme = programme;
     }
 
+    if (sessionParam !== null && sessionParam.trim() !== "") {
+      const academicSession = parseAcademicSession(sessionParam);
+      if (!academicSession) return fail("Invalid academic session.");
+      query.academicSession = academicSession;
+    }
+
     const docs = await ProgrammeSyllabus.find(query)
-      .sort({ programme: 1 })
+      .sort({ programme: 1, academicSession: 1 })
       .lean();
 
     return NextResponse.json({
@@ -81,6 +90,7 @@ export async function GET(req: Request) {
       data: docs.map((doc) => ({
         id: doc._id,
         programme: doc.programme,
+        academicSession: doc.academicSession ?? null,
         pdfUrl: doc.pdfUrl ?? null,
         pdfName: doc.pdfName ?? null,
         createdAt: doc.createdAt,
@@ -88,10 +98,7 @@ export async function GET(req: Request) {
     });
   } catch (error) {
     console.error("Admin programme syllabus list error:", error);
-    return NextResponse.json(
-      { success: false, message: "Unable to load programme syllabus." },
-      { status: 500 }
-    );
+    return fail("Unable to load programme syllabus.", 500);
   }
 }
 
@@ -100,38 +107,34 @@ export async function POST(req: Request) {
   if ("error" in auth) return auth.error;
 
   if (programmeSyllabusLimiter.check(req)) {
-    return NextResponse.json(
-      { success: false, message: "Too many requests. Please try again later." },
-      { status: 429 }
-    );
+    return fail("Too many requests. Please try again later.", 429);
   }
+
+  // Captured for a precise duplicate-key message below.
+  let conflictProgramme: string | null = null;
 
   try {
     await connectDB();
 
-    const body = await req.json();
-    const programme = parseProgrammeCode(body?.programme);
+    const body = (await req.json().catch(() => null)) as Record<string, unknown> | null;
+    if (!body) return fail("Invalid request body.");
 
-    if (!programme) {
-      return NextResponse.json(
-        {
-          success: false,
-          message:
-            "Programme is required (1-20 characters: letters, spaces, dots, ampersands or hyphens).",
-        },
-        { status: 400 }
-      );
-    }
+    // Identity must resolve to an ACTIVE structure — a new document is never
+    // attached to a historical/inactive curriculum.
+    const resolved = await resolveStructure(body.programme, body.academicSession, {
+      requireActive: true,
+    });
+    if (!resolved.ok) return fail(resolved.message, resolved.status);
 
-    const { pdfUrl, pdfName } = body ?? {};
+    const { programmeCode, academicSession } = resolved.data;
+    conflictProgramme = programmeCode;
+
+    const { pdfUrl, pdfName } = body;
 
     // Only references issued by POST /api/admin/syllabus/upload are accepted —
     // an arbitrary URL or filesystem path can never be stored.
     if (typeof pdfUrl !== "string" || !parseSyllabusPdfId(pdfUrl)) {
-      return NextResponse.json(
-        { success: false, message: "Invalid PDF reference." },
-        { status: 400 }
-      );
+      return fail("Invalid PDF reference.");
     }
 
     const nextPdfName =
@@ -139,19 +142,21 @@ export async function POST(req: Request) {
         ? safePdfFilename(pdfName)
         : null;
 
-    const existing = await ProgrammeSyllabus.findOne({ programme });
+    const existing = await ProgrammeSyllabus.findOne({
+      programme: programmeCode,
+      academicSession,
+    });
     const previousPdfUrl = existing?.pdfUrl ?? null;
 
-    // The replacement GridFS file is already stored (upload happened first), so
-    // the new reference is persisted before the old file is removed.
     const saved = existing
       ? await ProgrammeSyllabus.findOneAndUpdate(
-          { programme },
+          { programme: programmeCode, academicSession },
           { pdfUrl, pdfName: nextPdfName },
           { new: true }
         )
       : await ProgrammeSyllabus.create({
-          programme,
+          programme: programmeCode,
+          academicSession,
           pdfUrl,
           pdfName: nextPdfName,
         });
@@ -171,22 +176,44 @@ export async function POST(req: Request) {
   } catch (error: unknown) {
     const err = error as {
       name?: string;
+      code?: number;
       errors?: Record<string, { message: string }>;
     };
 
-    if (err.name === "ValidationError" && err.errors) {
-      const messages = Object.values(err.errors).map((e) => e.message);
-      return NextResponse.json(
-        { success: false, message: messages.join(" ") },
-        { status: 400 }
+    if (err.code === 11000) {
+      // A database still carrying the pre-integration `{ programme }` unique
+      // index reports a legacy session-less document as the conflict; say so
+      // honestly instead of assigning it a session.
+      if (conflictProgramme) {
+        try {
+          const legacy = await ProgrammeSyllabus.findOne({
+            programme: conflictProgramme,
+            academicSession: null,
+          }).select("_id");
+          if (legacy) {
+            return fail(
+              `A legacy session-less programme syllabus document already exists for ${conflictProgramme}. It cannot be mapped to an academic session automatically — a migration must be performed first (no session is ever guessed).`,
+              409
+            );
+          }
+        } catch {
+          /* legacy collection absent — fall through to the generic message */
+        }
+      }
+
+      return fail(
+        "A programme syllabus document already exists for that programme and academic session.",
+        409
       );
     }
 
+    if (err.name === "ValidationError" && err.errors) {
+      const messages = Object.values(err.errors).map((e) => e.message);
+      return fail(messages.join(" "));
+    }
+
     console.error("Admin programme syllabus save error:", error);
-    return NextResponse.json(
-      { success: false, message: "Unable to save programme syllabus." },
-      { status: 500 }
-    );
+    return fail("Unable to save programme syllabus.", 500);
   }
 }
 
@@ -195,10 +222,7 @@ export async function DELETE(req: Request) {
   if ("error" in auth) return auth.error;
 
   if (programmeSyllabusLimiter.check(req)) {
-    return NextResponse.json(
-      { success: false, message: "Too many requests. Please try again later." },
-      { status: 429 }
-    );
+    return fail("Too many requests. Please try again later.", 429);
   }
 
   try {
@@ -206,18 +230,22 @@ export async function DELETE(req: Request) {
 
     const url = new URL(req.url);
     const programme = parseProgrammeCode(url.searchParams.get("programme"));
+    if (!programme) return fail("A valid programme is required.");
 
-    if (!programme) {
-      return NextResponse.json(
-        { success: false, message: "A valid programme is required." },
-        { status: 400 }
-      );
+    const rawSession = url.searchParams.get("academicSession");
+    const sessionProvided = rawSession !== null && rawSession.trim() !== "";
+    const academicSession = sessionProvided ? parseAcademicSession(rawSession) : null;
+    if (sessionProvided && !academicSession) {
+      return fail("Academic session must look like 2023-24.");
     }
 
-    const existing = await ProgrammeSyllabus.findOne({ programme });
+    // Omitting the session targets a legacy session-less document.
+    const existing = await ProgrammeSyllabus.findOne({
+      programme,
+      academicSession: academicSession ?? null,
+    });
 
     if (!existing) {
-      // Idempotent: nothing attached, nothing to remove.
       return NextResponse.json({
         success: true,
         message: "No programme syllabus PDF was attached.",
@@ -226,7 +254,6 @@ export async function DELETE(req: Request) {
 
     const previousPdfUrl = existing.pdfUrl ?? null;
 
-    // Remove the database reference first, then delete the GridFS bytes.
     await ProgrammeSyllabus.deleteOne({ _id: existing._id });
 
     if (previousPdfUrl) {
@@ -240,9 +267,6 @@ export async function DELETE(req: Request) {
     });
   } catch (error) {
     console.error("Admin programme syllabus delete error:", error);
-    return NextResponse.json(
-      { success: false, message: "Unable to remove programme syllabus." },
-      { status: 500 }
-    );
+    return fail("Unable to remove programme syllabus.", 500);
   }
 }

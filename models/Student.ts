@@ -1,4 +1,20 @@
 import mongoose, { Schema, type Document } from "mongoose";
+import { STUDENT_STATUSES, type StudentStatus } from "@/lib/validation";
+
+/**
+ * Student model — one document per registered student account.
+ *
+ * `status` is the account lifecycle state:
+ * - "ACTIVE"   — a normal student (the default).
+ * - "INACTIVE" — deactivated: the student stays in MongoDB and every stored
+ *                 field is unchanged, but the account is treated as not
+ *                 active. Deactivation is NOT deletion.
+ *
+ * Documents created before the field existed carry no stored status and are
+ * treated as ACTIVE both in queries and in toSafeStudent(). They are never
+ * migrated or rewritten in bulk.
+ */
+export type { StudentStatus };
 
 export interface IStudent extends Document {
   name: string;
@@ -11,6 +27,8 @@ export interface IStudent extends Document {
   phone: string;
   college: string;
   profileImage: string;
+  /** Account state; defaults to ACTIVE. Legacy docs without it are ACTIVE. */
+  status: StudentStatus;
   registeredAt: Date;
   createdAt: Date;
   updatedAt: Date;
@@ -86,6 +104,14 @@ const studentSchema = new Schema<IStudent>(
       type: String,
       default: "",
     },
+    status: {
+      type: String,
+      enum: {
+        values: [...STUDENT_STATUSES],
+        message: "Status must be one of: ACTIVE, INACTIVE.",
+      },
+      default: "ACTIVE",
+    },
     registeredAt: {
       type: Date,
       default: Date.now,
@@ -116,6 +142,8 @@ export function toSafeStudent(student: IStudent) {
     aadhar: student.aadhar,
     abcId: student.abcId,
     profileImage: student.profileImage,
+    // Legacy documents (no stored status) are reported as ACTIVE.
+    status: student.status ?? "ACTIVE",
     registeredAt: student.registeredAt,
   };
 }

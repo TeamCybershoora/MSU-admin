@@ -1,9 +1,46 @@
 import mongoose, { Schema, type Document } from "mongoose";
+import {
+  SUBJECT_CODE_PATTERN,
+  SUBJECT_TYPES,
+  type SubjectType,
+} from "@/lib/programme-structure";
 
 /**
  * Result model — stores semester-wise examination results for students.
  *
  * One document per student + semester result.
+ *
+ * PHASE 3A — CURRICULUM SNAPSHOT:
+ * Subjects are resolved from the ProgrammeStructure curriculum when a Result is
+ * created, and the academic metadata used at that moment is SNAPSHOTTED here
+ * (name, credits, subjectType, assessment maximum). ProgrammeStructure is the
+ * source of truth, but a declared Result must never change later because the
+ * curriculum was edited — so no historical Result reads ProgrammeStructure.
+ *
+ * The snapshot is intentionally narrow: `curriculum` records the identity that
+ * was used (programmeCode + semesterNumber; the session is already stored on
+ * `student.academicSession`), and each subject carries its own snapshot fields.
+ * It is OPTIONAL, so Results created before this integration remain readable
+ * and are never migrated or rewritten.
+ *
+ * PHASE 3B — ACADEMIC CALCULATIONS:
+ * For curriculum-linked Results the server (lib/result-grading.ts) recalculates
+ * the authoritative figures on every write: subject total, subject percentage,
+ * grade point (from the percentage, never from the letter grade), result
+ * percentage and SGPA. The manually entered `grade` is passed through as-is.
+ * `sgpa` is therefore stored for new Results; `cgpa` stays null until reliable
+ * per-student semester history exists (no Student ↔ Result integration yet).
+ * Legacy Results (no curriculum) keep their originally stored values and are
+ * never migrated.
+ *
+ * PHASE 3C — AUTOMATIC SGPA + CGPA:
+ * Every curriculum-linked write recalculates SGPA here and, from the student's
+ * other curriculum-linked semester Results, the credit-weighted cumulative
+ * CGPA. The identity used to collect those semesters is the persisted one
+ * (enrollmentNumber + programmeCode + academicSession), and the authoritative
+ * values are stored on each semester's Result — the client can never supply or
+ * override SGPA/CGPA. Legacy Results (no curriculum) are never migrated or
+ * forced into the cumulative calculation.
  */
 
 /** A single subject within a semester result. */
@@ -17,7 +54,24 @@ export interface IResultSubject {
   grade: string;
   gradePoint: number;
   credits: number;
+  /**
+   * Snapshot of the subject's type in ProgrammeStructure (THEORY / PRACTICAL /
+   * THEORY_PRACTICAL). Null on Results created before the integration.
+   */
+  subjectType: SubjectType | null;
   isBacklog: boolean;
+}
+
+/**
+ * The curriculum identity a Result was created against.
+ *
+ * Only the values that were never stored before live here: the programme CODE
+ * (student.course is the display name) and the numeric semester (student.semester
+ * is a display label). `student.academicSession` already holds the session.
+ */
+export interface IResultCurriculum {
+  programmeCode: string;
+  semesterNumber: number;
 }
 
 /** Student identity and programme info embedded in the result. */
@@ -34,11 +88,21 @@ export interface IResultStudent {
 /** Full result document */
 export interface IResult extends Document {
   student: IResultStudent;
+  /** Curriculum identity snapshot; null on Results created before Phase 3A. */
+  curriculum: IResultCurriculum | null;
   subjects: IResultSubject[];
   totalMarks: number;
   maxTotalMarks: number;
   percentage: number;
-  cgpa: string;
+  /** Credit-weighted SGPA, 2 dp; null on Results written before Phase 3B. */
+  sgpa: number | null;
+  /**
+   * Credit-weighted cumulative SGPA through this semester, stored at 2 dp
+   * (e.g. "8.54"); null on Results written before Phase 3C and on legacy
+   * Results. Recomputed on every curriculum-linked write so it never goes
+   * stale when an earlier semester changes.
+   */
+  cgpa: string | null;
   resultStatus: "PASS" | "FAIL" | "COMPARTMENT";
   remarks: string;
   declaredDate: string;
@@ -50,10 +114,12 @@ export interface IResult extends Document {
 type ResultLike = Pick<
   IResult,
   | "student"
+  | "curriculum"
   | "subjects"
   | "totalMarks"
   | "maxTotalMarks"
   | "percentage"
+  | "sgpa"
   | "cgpa"
   | "resultStatus"
   | "remarks"
@@ -88,7 +154,11 @@ const validCredits = {
   message: "Credits must be a positive integer.",
 };
 
-const subjectCodePattern = /^[A-Za-z0-9]+$/;
+// Aligned with ProgrammeStructure's subject-code rule: curriculum codes the
+// structure accepts must be storable on a Result (alphanumeric codes are a
+// strict subset, so every existing Result stays valid).
+const subjectCodePattern = SUBJECT_CODE_PATTERN;
+const subjectTypeValues = SUBJECT_TYPES as unknown as string[];
 const subjectNameRequired = {
   validator: (v: string) => typeof v === "string" && v.trim().length > 0,
   message: "Subject name is required.",
@@ -154,10 +224,43 @@ const resultSubjectSchema = new Schema<IResultSubject>(
       required: [true, "Credits are required"],
       validate: validCredits,
     },
+    // Optional on purpose: Results written before Phase 3A carry no type.
+    subjectType: {
+      type: String,
+      enum: {
+        values: subjectTypeValues,
+        message: "Subject type must be one of: {VALUES}.",
+      },
+      default: null,
+    },
     isBacklog: {
       type: Boolean,
       required: [true, "isBacklog is required"],
       default: false,
+    },
+  },
+  { _id: false }
+);
+
+/* ── Curriculum snapshot schema ─────────────────────────────────── */
+
+const resultCurriculumSchema = new Schema<IResultCurriculum>(
+  {
+    programmeCode: {
+      type: String,
+      required: [true, "Programme code is required"],
+      trim: true,
+      uppercase: true,
+    },
+    semesterNumber: {
+      type: Number,
+      required: [true, "Semester number is required"],
+      min: [1, "Semester number must be at least 1"],
+      max: [12, "Semester number must be at most 12"],
+      validate: {
+        validator: (v: number) => Number.isInteger(v),
+        message: "Semester number must be a whole number.",
+      },
     },
   },
   { _id: false }
@@ -216,6 +319,11 @@ const resultSchema = new Schema<IResult>(
       type: resultStudentSchema,
       required: [true, "Student info is required"],
     },
+    // Null = a Result created before the integration (never back-filled).
+    curriculum: {
+      type: resultCurriculumSchema,
+      default: null,
+    },
     subjects: {
       type: [resultSubjectSchema],
       default: [],
@@ -239,9 +347,23 @@ const resultSchema = new Schema<IResult>(
       required: [true, "Percentage is required"],
       validate: percentageRange,
     },
+    // Calculated server-side from credits × grade points (lib/result-grading.ts).
+    // Optional: legacy Results predate the field and are never migrated.
+    sgpa: {
+      type: Number,
+      default: null,
+      validate: {
+        validator: (v: number | null) =>
+          v === null || (typeof v === "number" && v >= 0 && v <= 10),
+        message: "SGPA must be between 0 and 10.",
+      },
+    },
+    // Phase 3C: credit-weighted cumulative CGPA through this semester, stored
+    // as a 2 dp string. Null while no included semester exists / on legacy
+    // Results; recomputed server-side on every curriculum-linked write.
     cgpa: {
       type: String,
-      required: [true, "CGPA is required"],
+      default: null,
       trim: true,
     },
     resultStatus: {
@@ -293,6 +415,12 @@ export function toSafeResult(result: ResultLike) {
       academicSession: result.student.academicSession,
       collegeName: result.student.collegeName,
     },
+    curriculum: result.curriculum
+      ? {
+          programmeCode: result.curriculum.programmeCode,
+          semesterNumber: result.curriculum.semesterNumber,
+        }
+      : null,
     subjects: result.subjects.map((subject) => ({
       subjectCode: subject.subjectCode,
       subjectName: subject.subjectName,
@@ -303,12 +431,14 @@ export function toSafeResult(result: ResultLike) {
       grade: subject.grade,
       gradePoint: subject.gradePoint,
       credits: subject.credits,
+      subjectType: subject.subjectType ?? null,
       isBacklog: subject.isBacklog,
     })),
     totalMarks: result.totalMarks,
     maxTotalMarks: result.maxTotalMarks,
     percentage: result.percentage,
-    cgpa: result.cgpa,
+    sgpa: result.sgpa ?? null,
+    cgpa: result.cgpa ?? null,
     resultStatus: result.resultStatus,
     remarks: result.remarks,
     declaredDate: result.declaredDate,
