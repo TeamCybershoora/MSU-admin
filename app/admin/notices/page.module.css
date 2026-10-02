@@ -300,6 +300,54 @@
   box-shadow: 0 0 0 3px rgba(224, 122, 82, 0.1);
 }
 
+/* ── Featured image (Latest News) ─────────────────────── */
+
+.formHint {
+  font-size: 0.72rem;
+  color: color-mix(in srgb, var(--foreground) 50%, var(--muted));
+}
+
+.imagePreview {
+  margin-top: 0.35rem;
+  border: 1px solid rgba(21, 97, 109, 0.12);
+  border-radius: 10px;
+  overflow: hidden;
+  background: rgba(21, 97, 109, 0.04);
+}
+
+.imagePreview img {
+  display: block;
+  width: 100%;
+  max-height: 200px;
+  object-fit: cover;
+}
+
+.viewImage {
+  display: block;
+  width: 100%;
+  max-height: 260px;
+  object-fit: cover;
+  border-radius: 10px;
+  border: 1px solid rgba(21, 97, 109, 0.12);
+}
+
+.removeImage {
+  align-self: flex-start;
+  margin-top: 0.25rem;
+  padding: 0.35rem 0.7rem;
+  border: 1px solid rgba(220, 38, 38, 0.25);
+  background: rgba(220, 38, 38, 0.06);
+  color: #dc2626;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.removeImage:hover {
+  background: rgba(220, 38, 38, 0.12);
+}
+
 .formError {
   margin: 0;
   padding: 0.6rem 0.8rem;

@@ -56,4 +56,8 @@ export interface SafeNotice {
   status: NoticeStatus;
   attachmentName: string;
   attachmentUrl: string;
+  /** Public URL of the featured image, or "" when none is set. */
+  imageUrl: string;
+  /** Accessibility text for the featured image. */
+  imageAlt: string;
 }

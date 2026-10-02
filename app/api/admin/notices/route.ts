@@ -13,6 +13,7 @@ import {
   type ContentType,
 } from "@/lib/notice-types";
 import { escapeRegex } from "@/lib/validation";
+import { deleteImage, isImageId } from "@/lib/image-storage";
 
 const adminNoticeLimiter = createRateLimiter({
   name: "admin-notices",
@@ -75,9 +76,19 @@ function validateNoticeBody(
   const attachmentName = trimString(b.attachmentName) ?? "";
   const attachmentUrl = trimString(b.attachmentUrl) ?? "";
 
+  // Optional featured image: either empty, or a GridFS id produced by the
+  // shared image upload endpoint. Any other value is rejected so a record can
+  // never reference an arbitrary path or malformed id.
+  const imageId = trimString(b.imageId) ?? "";
+  if (imageId && !isImageId(imageId)) {
+    return { ok: false, error: "Invalid featured image reference." };
+  }
+  const imageName = trimString(b.imageName) ?? "";
+  const imageAlt = trimString(b.imageAlt) ?? "";
+
   return {
     ok: true,
-    data: { title, summary, content, category, contentType, publishedDate, status, isNewNotice, isImportant, attachmentName, attachmentUrl },
+    data: { title, summary, content, category, contentType, publishedDate, status, isNewNotice, isImportant, attachmentName, attachmentUrl, imageId, imageName, imageAlt },
   };
 }
 
@@ -129,6 +140,16 @@ function validateUpdateBody(
   if (b.isImportant !== undefined) cleaned.isImportant = b.isImportant === true;
   if (b.attachmentName !== undefined) cleaned.attachmentName = trimString(b.attachmentName) ?? "";
   if (b.attachmentUrl !== undefined) cleaned.attachmentUrl = trimString(b.attachmentUrl) ?? "";
+
+  if (b.imageId !== undefined) {
+    const imageId = trimString(b.imageId) ?? "";
+    if (imageId && !isImageId(imageId)) {
+      return { ok: false, error: "Invalid featured image reference." };
+    }
+    cleaned.imageId = imageId;
+  }
+  if (b.imageName !== undefined) cleaned.imageName = trimString(b.imageName) ?? "";
+  if (b.imageAlt !== undefined) cleaned.imageAlt = trimString(b.imageAlt) ?? "";
 
   if (Object.keys(cleaned).length === 0) return { ok: false, error: "No valid fields to update." };
 
@@ -323,12 +344,19 @@ export async function PUT(req: Request) {
       );
     }
 
+    const previousImageId = notice.imageId;
+
     const updates = validation.data;
     for (const [key, value] of Object.entries(updates)) {
       (notice as Record<string, unknown>)[key] = value;
     }
 
     await notice.save();
+
+    // The featured image was replaced or cleared — drop the superseded bytes.
+    if (notice.imageId !== previousImageId) {
+      await deleteImage(previousImageId);
+    }
 
     return NextResponse.json({
       success: true,

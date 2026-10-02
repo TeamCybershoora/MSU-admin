@@ -46,12 +46,12 @@ import ErrorState from "@/components/error-state";
 import { NOTICE_CATEGORIES, VALID_CONTENT_TYPES, type NoticeCategory, type NoticeStatus, type ContentType } from "@/lib/notice-types";
 import styles from "./page.module.css";
 
-interface NoticeRecord { id: string; title: string; summary: string; content: string; category: NoticeCategory; contentType: ContentType; publishedDate: string; isNew: boolean; isImportant: boolean; status: NoticeStatus; attachmentName: string; attachmentUrl: string; }
+interface NoticeRecord { id: string; title: string; summary: string; content: string; category: NoticeCategory; contentType: ContentType; publishedDate: string; isNew: boolean; isImportant: boolean; status: NoticeStatus; attachmentName: string; attachmentUrl: string; imageId: string; imageName: string; imageAlt: string; imageUrl: string; }
 interface Pagination { page: number; limit: number; total: number; totalPages: number; }
-interface FormState { title: string; summary: string; content: string; category: string; contentType: ContentType; publishedDate: string; status: NoticeStatus; isNewNotice: boolean; isImportant: boolean; attachmentName: string; attachmentUrl: string; }
+interface FormState { title: string; summary: string; content: string; category: string; contentType: ContentType; publishedDate: string; status: NoticeStatus; isNewNotice: boolean; isImportant: boolean; attachmentName: string; attachmentUrl: string; imageId: string; imageName: string; imageAlt: string; }
 
 function blankForm(): FormState {
-  return { title: "", summary: "", content: "", category: "", contentType: "notice", publishedDate: new Date().toISOString().split("T")[0], status: "draft", isNewNotice: false, isImportant: false, attachmentName: "", attachmentUrl: "" };
+  return { title: "", summary: "", content: "", category: "", contentType: "notice", publishedDate: new Date().toISOString().split("T")[0], status: "draft", isNewNotice: false, isImportant: false, attachmentName: "", attachmentUrl: "", imageId: "", imageName: "", imageAlt: "" };
 }
 
 function getStatusVariant(s: NoticeStatus): "success" | "info" { return s === "published" ? "success" : "info"; }
@@ -68,6 +68,12 @@ export default function AdminNoticesPage() {
   const [statusFilter, setStatusFilter] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  // Featured-image upload state, shared by the create and edit forms (only one
+  // is open at a time). `imageFile` is a newly picked file; `imagePreview` is
+  // its local object URL.
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
 
   const [viewingNotice, setViewingNotice] = useState<NoticeRecord | null>(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -118,8 +124,63 @@ export default function AdminNoticesPage() {
   function handleSearch(e: React.FormEvent) { e.preventDefault(); fetchNotices(1); }
   function formatDate(d: string) { return new Date(d).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }); }
   function updateFormFields(setter: React.Dispatch<React.SetStateAction<FormState>>, field: keyof FormState, value: string | boolean) { setter((prev) => ({ ...prev, [field]: value })); }
-  function buildRequestBody(form: FormState) {
-    return { title: form.title.trim(), summary: form.summary.trim(), content: form.content.trim(), category: form.category, contentType: form.contentType, publishedDate: form.publishedDate, status: form.status, isNewNotice: form.isNewNotice, isImportant: form.isImportant, attachmentName: form.attachmentName.trim(), attachmentUrl: form.attachmentUrl.trim() };
+  function buildRequestBody(form: FormState, imageId: string, imageName: string) {
+    return { title: form.title.trim(), summary: form.summary.trim(), content: form.content.trim(), category: form.category, contentType: form.contentType, publishedDate: form.publishedDate, status: form.status, isNewNotice: form.isNewNotice, isImportant: form.isImportant, attachmentName: form.attachmentName.trim(), attachmentUrl: form.attachmentUrl.trim(), imageId, imageName, imageAlt: form.imageAlt.trim() };
+  }
+
+  function resetImageState() {
+    setImageFile(null);
+    setImagePreview((prev) => { if (prev) URL.revokeObjectURL(prev); return null; });
+  }
+
+  function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const picked = e.target.files?.[0] ?? null;
+    setImageFile(picked);
+    setImagePreview((prev) => { if (prev) URL.revokeObjectURL(prev); return picked ? URL.createObjectURL(picked) : null; });
+  }
+
+  function clearImage(setter: React.Dispatch<React.SetStateAction<FormState>>) {
+    setter((prev) => ({ ...prev, imageId: "", imageName: "" }));
+    resetImageState();
+  }
+
+  /** Upload a newly picked file (if any) and return the image id/name to store. */
+  async function resolveImage(token: string, form: FormState): Promise<{ ok: true; imageId: string; imageName: string } | { ok: false; error: string }> {
+    let imageId = form.imageId;
+    let imageName = form.imageName;
+    if (imageFile) {
+      const fd = new FormData();
+      fd.append("file", imageFile);
+      const res = await fetch("/api/admin/images/upload", { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: fd });
+      const data = await res.json();
+      if (!data.success) return { ok: false, error: data.message || "Image upload failed." };
+      imageId = data.imageId as string;
+      imageName = (data.imageName as string) ?? "";
+    }
+    return { ok: true, imageId, imageName };
+  }
+
+  /** Featured-image field shared by the create and edit modals. */
+  function renderImageField(form: FormState, setter: React.Dispatch<React.SetStateAction<FormState>>) {
+    const previewSrc = imagePreview ?? (form.imageId ? `/api/images/${form.imageId}` : null);
+    return (
+      <div className={styles.formField}>
+        <label>Featured Image (optional)</label>
+        {previewSrc && (
+          <div className={styles.imagePreview}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={previewSrc} alt="Featured image preview" />
+          </div>
+        )}
+        <input type="file" accept="image/jpeg,image/png,image/webp" onChange={handleImageChange} />
+        <span className={styles.formHint}>JPEG, PNG or WebP, up to 5 MB. Shown on the homepage Latest News section.</span>
+        {(form.imageId || imageFile) && (
+          <button type="button" className={styles.removeImage} onClick={() => clearImage(setter)}>Remove featured image</button>
+        )}
+        <label>Image Alt Text</label>
+        <input type="text" maxLength={200} placeholder="e.g. Students at the annual cultural fest" value={form.imageAlt} onChange={(e) => updateFormFields(setter, "imageAlt", e.target.value)} />
+      </div>
+    );
   }
 
   async function handleCreateSubmit(e: React.FormEvent) {
@@ -128,17 +189,19 @@ export default function AdminNoticesPage() {
     setCreateLoading(true); setCreateError(""); setCreateSuccess("");
     const token = getStoredToken(); if (!token) { setCreateError("Not authenticated."); setCreateLoading(false); return; }
     try {
-      const res = await fetch("/api/admin/notices", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify(buildRequestBody(createForm)) });
+      const upload = await resolveImage(token, createForm);
+      if (!upload.ok) { setCreateError(upload.error); return; }
+      const res = await fetch("/api/admin/notices", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify(buildRequestBody(createForm, upload.imageId, upload.imageName)) });
       const data = await res.json();
       if (!data.success) { setCreateError(data.message || "Failed to create notice."); return; }
       setCreateSuccess("Notice created!");
-      setTimeout(() => { setShowCreateForm(false); setCreateSuccess(""); setCreateForm(blankForm()); fetchNotices(1); }, 1000);
+      setTimeout(() => { setShowCreateForm(false); setCreateSuccess(""); setCreateForm(blankForm()); resetImageState(); fetchNotices(1); }, 1000);
     } catch { setCreateError("Unable to connect to server."); } finally { setCreateLoading(false); }
   }
 
   function openEditForm(n: NoticeRecord) {
-    setShowEditForm(true); setEditingNoticeId(n.id); setEditError(""); setEditSuccess("");
-    setEditForm({ title: n.title, summary: n.summary, content: n.content, category: n.category, contentType: n.contentType || "notice", publishedDate: n.publishedDate ? new Date(n.publishedDate).toISOString().split("T")[0] : "", status: n.status, isNewNotice: n.isNew, isImportant: n.isImportant, attachmentName: n.attachmentName || "", attachmentUrl: n.attachmentUrl || "" });
+    setShowEditForm(true); setEditingNoticeId(n.id); setEditError(""); setEditSuccess(""); resetImageState();
+    setEditForm({ title: n.title, summary: n.summary, content: n.content, category: n.category, contentType: n.contentType || "notice", publishedDate: n.publishedDate ? new Date(n.publishedDate).toISOString().split("T")[0] : "", status: n.status, isNewNotice: n.isNew, isImportant: n.isImportant, attachmentName: n.attachmentName || "", attachmentUrl: n.attachmentUrl || "", imageId: n.imageId || "", imageName: n.imageName || "", imageAlt: n.imageAlt || "" });
   }
 
   async function handleEditSubmit(e: React.FormEvent) {
@@ -147,11 +210,13 @@ export default function AdminNoticesPage() {
     setEditLoading(true); setEditError(""); setEditSuccess("");
     const token = getStoredToken(); if (!token) { setEditError("Not authenticated."); setEditLoading(false); return; }
     try {
-      const res = await fetch("/api/admin/notices", { method: "PUT", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ noticeId: editingNoticeId, ...buildRequestBody(editForm) }) });
+      const upload = await resolveImage(token, editForm);
+      if (!upload.ok) { setEditError(upload.error); return; }
+      const res = await fetch("/api/admin/notices", { method: "PUT", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ noticeId: editingNoticeId, ...buildRequestBody(editForm, upload.imageId, upload.imageName) }) });
       const data = await res.json();
       if (!data.success) { setEditError(data.message || "Failed to update."); return; }
       setEditSuccess("Notice updated!");
-      setTimeout(() => { setShowEditForm(false); setEditingNoticeId(""); setEditSuccess(""); setEditForm(blankForm()); fetchNotices(pagination.page); }, 1000);
+      setTimeout(() => { setShowEditForm(false); setEditingNoticeId(""); setEditSuccess(""); setEditForm(blankForm()); resetImageState(); fetchNotices(pagination.page); }, 1000);
     } catch { setEditError("Unable to connect to server."); } finally { setEditLoading(false); }
   }
 
@@ -198,7 +263,7 @@ export default function AdminNoticesPage() {
               <option value="published">Published</option>
               <option value="draft">Draft</option>
             </select>
-            <Button variant="primary" size="sm" onClick={() => { setCreateForm(blankForm()); setCreateError(""); setCreateSuccess(""); setShowCreateForm(true); }}><Plus size={14} /> Add Notice</Button>
+            <Button variant="primary" size="sm" onClick={() => { setCreateForm(blankForm()); setCreateError(""); setCreateSuccess(""); resetImageState(); setShowCreateForm(true); }}><Plus size={14} /> Add Notice</Button>
           </div>
         </div>
       </Card>
@@ -281,6 +346,13 @@ export default function AdminNoticesPage() {
               <div className={styles.profileItem}><span className={styles.profileLabel}>Published</span><span className={styles.profileValue}>{formatDate(viewingNotice.publishedDate)}</span></div>
               <div className={styles.profileItemFull}><span className={styles.profileLabel}>Summary</span><span className={styles.profileValue}>{viewingNotice.summary}</span></div>
               <div className={styles.profileItemFull}><span className={styles.profileLabel}>Content</span><span className={styles.profileValue}>{viewingNotice.content}</span></div>
+              {viewingNotice.imageId && (
+                <div className={styles.profileItemFull}>
+                  <span className={styles.profileLabel}>Featured Image</span>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img className={styles.viewImage} src={viewingNotice.imageUrl || `/api/images/${viewingNotice.imageId}`} alt={viewingNotice.imageAlt || viewingNotice.title} />
+                </div>
+              )}
             </div>
             <div className={styles.modalActions}><Button variant="secondary" onClick={() => setViewingNotice(null)}>Close</Button></div>
           </>
@@ -301,6 +373,7 @@ export default function AdminNoticesPage() {
             <div className={styles.formField}><label>Status</label><select value={createForm.status} onChange={(e) => updateFormFields(setCreateForm, "status", e.target.value as NoticeStatus)}><option value="draft">Draft</option><option value="published">Published</option></select></div>
             <div className={styles.formField}><label><input type="checkbox" checked={createForm.isNewNotice} onChange={(e) => updateFormFields(setCreateForm, "isNewNotice", e.target.checked)} /> Mark as New</label></div>
             <div className={styles.formField}><label><input type="checkbox" checked={createForm.isImportant} onChange={(e) => updateFormFields(setCreateForm, "isImportant", e.target.checked)} /> Mark as Important</label></div>
+            {renderImageField(createForm, setCreateForm)}
           </div>
           {createError && <p className={styles.formError}>{createError}</p>}
           {createSuccess && <p className={styles.formSuccess}>{createSuccess}</p>}
@@ -325,6 +398,7 @@ export default function AdminNoticesPage() {
             <div className={styles.formField}><label>Status</label><select value={editForm.status} onChange={(e) => updateFormFields(setEditForm, "status", e.target.value as NoticeStatus)}><option value="draft">Draft</option><option value="published">Published</option></select></div>
             <div className={styles.formField}><label><input type="checkbox" checked={editForm.isNewNotice} onChange={(e) => updateFormFields(setEditForm, "isNewNotice", e.target.checked)} /> Mark as New</label></div>
             <div className={styles.formField}><label><input type="checkbox" checked={editForm.isImportant} onChange={(e) => updateFormFields(setEditForm, "isImportant", e.target.checked)} /> Mark as Important</label></div>
+            {renderImageField(editForm, setEditForm)}
           </div>
           {editError && <p className={styles.formError}>{editError}</p>}
           {editSuccess && <p className={styles.formSuccess}>{editSuccess}</p>}

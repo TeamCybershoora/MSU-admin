@@ -25,6 +25,12 @@ export interface INotice extends Document {
   status: NoticeStatus;
   attachmentName: string;
   attachmentUrl: string;
+  /** GridFS ObjectId of the optional featured image (news cards). */
+  imageId: string;
+  /** Original (sanitised) featured-image filename — admin metadata only. */
+  imageName: string;
+  /** Accessibility text for the featured image. */
+  imageAlt: string;
   isDeleted: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -43,6 +49,9 @@ type NoticeLike = Pick<
   | "status"
   | "attachmentName"
   | "attachmentUrl"
+  | "imageId"
+  | "imageName"
+  | "imageAlt"
 >;
 
 const noticeSchema = new Schema<INotice>(
@@ -110,6 +119,22 @@ const noticeSchema = new Schema<INotice>(
       default: "",
       trim: true,
     },
+    imageId: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    imageName: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    imageAlt: {
+      type: String,
+      default: "",
+      trim: true,
+      maxlength: [200, "Image alt text cannot exceed 200 characters."],
+    },
     isDeleted: {
       type: Boolean,
       default: false,
@@ -125,6 +150,15 @@ noticeSchema.index({ status: 1, isDeleted: 1, publishedDate: -1 });
 noticeSchema.index({ contentType: 1, status: 1, isDeleted: 1 });
 noticeSchema.index({ category: 1 });
 noticeSchema.index({ isDeleted: 1 });
+
+/**
+ * Public path that serves a stored notice image by its GridFS id.
+ * Images are stored in the shared "siteImages" bucket via lib/image-storage.ts
+ * (the same storage used by Campus Spotlight and University Leadership).
+ */
+export function noticeImageUrl(imageId: string): string {
+  return imageId ? `/api/images/${imageId}` : "";
+}
 
 /**
  * Return clean, public-safe notice data.
@@ -143,6 +177,8 @@ export function toSafeNotice(doc: NoticeLike & { _id?: unknown }): SafeNotice {
     status: doc.status,
     attachmentName: doc.attachmentName || "",
     attachmentUrl: doc.attachmentUrl || "",
+    imageUrl: noticeImageUrl(doc.imageId || ""),
+    imageAlt: doc.imageAlt || "",
   };
 }
 

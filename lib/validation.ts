@@ -165,3 +165,86 @@ export function safePdfFilename(name: string): string {
 export function headerSafeFilename(name: string): string {
   return (name || "syllabus.pdf").replace(/[^\w .()-]/g, "_").slice(0, 120);
 }
+
+/* ── Image upload validation ────────────────────────────────────── */
+
+/** Maximum accepted spotlight image size (5 MB). */
+export const IMAGE_MAX_BYTES = 5 * 1024 * 1024;
+
+/** Image MIME types the spotlight gallery accepts. */
+export type AllowedImageType = "image/jpeg" | "image/png" | "image/webp";
+
+/**
+ * Identify an image from its file signature (magic bytes).
+ *
+ * The browser-supplied MIME type and the file extension are attacker-controlled,
+ * so the bytes themselves are the authoritative check — this rejects scripts or
+ * other files merely renamed to `.jpg`/`.png`. Returns null when the signature
+ * is not one of the accepted image formats.
+ */
+export function sniffImageType(data: Uint8Array): AllowedImageType | null {
+  // JPEG — starts with the SOI marker FF D8 FF.
+  if (data.length >= 3 && data[0] === 0xff && data[1] === 0xd8 && data[2] === 0xff) {
+    return "image/jpeg";
+  }
+
+  // PNG — the full 8-byte signature.
+  if (
+    data.length >= 8 &&
+    data[0] === 0x89 &&
+    data[1] === 0x50 &&
+    data[2] === 0x4e &&
+    data[3] === 0x47 &&
+    data[4] === 0x0d &&
+    data[5] === 0x0a &&
+    data[6] === 0x1a &&
+    data[7] === 0x0a
+  ) {
+    return "image/png";
+  }
+
+  // WebP — "RIFF" .... "WEBP".
+  if (
+    data.length >= 12 &&
+    data[0] === 0x52 &&
+    data[1] === 0x49 &&
+    data[2] === 0x46 &&
+    data[3] === 0x46 &&
+    data[8] === 0x57 &&
+    data[9] === 0x45 &&
+    data[10] === 0x42 &&
+    data[11] === 0x50
+  ) {
+    return "image/webp";
+  }
+
+  return null;
+}
+
+/** Canonical file extension for an accepted image type. */
+export function imageExtensionFor(type: AllowedImageType): string {
+  if (type === "image/jpeg") return "jpg";
+  if (type === "image/png") return "png";
+  return "webp";
+}
+
+/**
+ * Produce a safe display/storage name for an uploaded image.
+ *
+ * Strips any directory component (defeating `../` path traversal), removes
+ * characters unsafe in headers or listings, caps the length and forces an
+ * extension matching the verified content type. Used only as a label — reads
+ * are always by generated ObjectId, never by this name.
+ */
+export function safeImageFilename(name: string, type: AllowedImageType): string {
+  const base = (name || "").split(/[\/]/).pop() || "";
+  const withoutExtension = base.replace(/\.[^.]*$/, "");
+  const cleaned = withoutExtension
+    .replace(/[^\w .()-]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 100);
+
+  const safe = cleaned || "spotlight";
+  return `${safe}.${imageExtensionFor(type)}`;
+}
