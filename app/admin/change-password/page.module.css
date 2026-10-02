@@ -1,0 +1,177 @@
+/* ── Change Password page ─────────────────────────────────────── */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  max-width: 40rem;
+}
+
+.section {
+  padding: 1.5rem;
+}
+
+/* ── Info notice ─────────────────────────────────────── */
+
+.notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 1rem 0 1.5rem;
+  padding: 0.75rem 1rem;
+  border-radius: 12px;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: color-mix(in srgb, var(--foreground) 75%, var(--muted));
+  background: rgba(21, 97, 109, 0.06);
+  border: 1px solid rgba(21, 97, 109, 0.12);
+}
+
+.notice svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+  opacity: 0.7;
+}
+
+/* ── Super Admin notice ──────────────────────────────── */
+
+.noticeBlock {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.6rem;
+  padding: 2rem 1.5rem;
+}
+
+.noticeIcon {
+  width: 52px;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  background: rgba(224, 122, 82, 0.12);
+  color: var(--accent);
+}
+
+.noticeIcon svg {
+  width: 24px;
+  height: 24px;
+}
+
+.noticeBlock h2 {
+  font-family: var(--font-playfair), Georgia, serif;
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--foreground);
+  margin: 0;
+}
+
+.noticeBlock p {
+  margin: 0;
+  max-width: 34rem;
+  font-size: 0.88rem;
+  line-height: 1.55;
+  color: color-mix(in srgb, var(--foreground) 60%, var(--muted));
+}
+
+/* ── Form ────────────────────────────────────────────── */
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.formFields {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+}
+
+.formField {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.formField label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--foreground) 75%, var(--muted));
+}
+
+.formField input {
+  background: rgba(255, 255, 255, 0.7);
+  border: 1.5px solid rgba(21, 97, 109, 0.12);
+  border-radius: 10px;
+  padding: 0.65rem 0.85rem;
+  font-size: 0.9rem;
+  color: var(--foreground);
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.formField input::placeholder {
+  color: color-mix(in srgb, var(--foreground) 35%, transparent);
+}
+
+.formField input:focus {
+  border-color: var(--accent);
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(224, 122, 82, 0.1);
+}
+
+.formActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
+
+/* ── Feedback ────────────────────────────────────────── */
+
+.formError,
+.formSuccess {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 0.6rem 0.8rem;
+  border-radius: 10px;
+  font-size: 0.85rem;
+}
+
+.formError {
+  color: #dc2626;
+  background: rgba(220, 38, 38, 0.06);
+  border: 1px solid rgba(220, 38, 38, 0.15);
+}
+
+.formSuccess {
+  color: #059669;
+  background: rgba(5, 150, 105, 0.06);
+  border: 1px solid rgba(5, 150, 105, 0.15);
+}
+
+.formError svg,
+.formSuccess svg {
+  flex-shrink: 0;
+}
+
+/* ── Dark mode ────────────────────────────────────────── */
+
+:global(html.dark) .notice {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+:global(html.dark) .formField input {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+:global(html.dark) .formField input:focus {
+  background: rgba(255, 255, 255, 0.06);
+}

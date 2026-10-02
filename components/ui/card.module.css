@@ -1,0 +1,137 @@
+/* ── Card System ─────────────────────────────────────── */
+
+.card {
+  background: rgba(255, 255, 255, 0.55);
+  backdrop-filter: blur(16px) saturate(1.6);
+  -webkit-backdrop-filter: blur(16px) saturate(1.6);
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.9) inset,
+    0 -1px 0 rgba(0, 0, 0, 0.04) inset,
+    0 8px 32px rgba(0, 0, 0, 0.06);
+  padding: 1.5rem;
+  transition: box-shadow 0.25s ease;
+}
+
+.cardHover:hover {
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.9) inset,
+    0 -1px 0 rgba(0, 0, 0, 0.04) inset,
+    0 12px 40px rgba(0, 0, 0, 0.08);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.2rem;
+  gap: 1rem;
+}
+
+.title {
+  font-family: var(--font-playfair), Georgia, serif;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--foreground);
+  margin: 0;
+}
+
+.subtitle {
+  font-size: 0.82rem;
+  color: color-mix(in srgb, var(--foreground) 50%, var(--muted));
+  margin: 0.2rem 0 0;
+}
+
+/* ── Stat Card ─────────────────────────────────────── */
+
+.stat {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.2rem;
+}
+
+.statIcon {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  flex-shrink: 0;
+}
+
+.statIcon svg {
+  width: 22px;
+  height: 22px;
+}
+
+.statIconTeal {
+  background: rgba(21, 97, 109, 0.1);
+  color: #15616d;
+}
+
+.statIconAccent {
+  background: rgba(224, 122, 82, 0.1);
+  color: #e07a52;
+}
+
+.statIconMuted {
+  background: rgba(255, 125, 0, 0.1);
+  color: #ff7d00;
+}
+
+.statIconNeutral {
+  background: rgba(0, 0, 0, 0.04);
+  color: color-mix(in srgb, var(--foreground) 50%, var(--muted));
+}
+
+.statContent {
+  flex: 1;
+  min-width: 0;
+}
+
+.statLabel {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: color-mix(in srgb, var(--foreground) 50%, var(--muted));
+  margin: 0;
+}
+
+.statValue {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--foreground);
+  margin: 0.15rem 0 0;
+  line-height: 1.2;
+}
+
+/* ── Dark mode ─────────────────────────────────────── */
+
+:global(html.dark) .card {
+  background: rgba(44, 43, 45, 0.55);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+:global(html.dark) .statIconTeal {
+  background: rgba(21, 97, 109, 0.2);
+  color: #5cb8b2;
+}
+
+:global(html.dark) .statIconAccent {
+  background: rgba(255, 103, 102, 0.15);
+  color: #ff8a80;
+}
+
+:global(html.dark) .statIconMuted {
+  background: rgba(255, 177, 115, 0.15);
+  color: #ffb173;
+}
+
+:global(html.dark) .statIconNeutral {
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.4);
+}

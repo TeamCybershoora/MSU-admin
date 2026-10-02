@@ -1,0 +1,158 @@
+/* ── Mobile Record List ───────────────────────────────────────────
+   Mobile-only presentation of an admin table row.
+
+   Desktop and tablet keep the real <table> (see each page's
+   `.tableWrapper`); below the project's existing 600px mobile
+   breakpoint the wrapper is hidden and this list is shown instead.
+   Both render from the same fetched array — no extra data fetching.
+
+   Hidden by default so desktop rendering is provably unaffected even
+   before the page-level media query applies.
+   ─────────────────────────────────────────────────────────────── */
+
+.list {
+  display: none;
+}
+
+.card {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  border: 1px solid rgba(21, 97, 109, 0.12);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.7);
+  overflow: hidden;
+}
+
+/* ── Header: identity + compact actions ── */
+
+.head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.8rem 0.9rem;
+  background: rgba(21, 97, 109, 0.04);
+  border-bottom: 1px solid rgba(21, 97, 109, 0.1);
+  min-width: 0;
+}
+
+.identity {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.title {
+  margin: 0;
+  font-size: 0.92rem;
+  font-weight: 700;
+  line-height: 1.35;
+  color: var(--foreground);
+  /* Long names / notice titles must never widen the card. */
+  overflow-wrap: anywhere;
+}
+
+.subtitle {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  color: color-mix(in srgb, var(--foreground) 55%, var(--muted));
+  overflow-wrap: anywhere;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+}
+
+/* ── Field rows: LABEL          VALUE ── */
+
+.fields {
+  margin: 0;
+  padding: 0;
+}
+
+.field {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  column-gap: 0.75rem;
+  row-gap: 0.15rem;
+  padding: 0.6rem 0.9rem;
+  min-width: 0;
+  border-bottom: 1px solid rgba(21, 97, 109, 0.07);
+}
+
+.field:last-child {
+  border-bottom: none;
+}
+
+.label {
+  margin: 0;
+  flex: 0 0 auto;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: color-mix(in srgb, var(--foreground) 45%, var(--muted));
+}
+
+.value {
+  margin: 0;
+  flex: 1 1 55%;
+  min-width: 0;
+  text-align: right;
+  font-size: 0.85rem;
+  line-height: 1.45;
+  color: var(--foreground);
+  /* Long emails / addresses wrap inside the card instead of pushing it
+     wider than the viewport. */
+  overflow-wrap: anywhere;
+}
+
+/* ── Dark mode ── */
+
+:global(html.dark) .card {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+:global(html.dark) .head {
+  background: rgba(255, 255, 255, 0.05);
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+
+:global(html.dark) .field {
+  border-bottom-color: rgba(255, 255, 255, 0.06);
+}
+
+/* ── Mobile only ───────────────────────────────────────────────
+   600px is the breakpoint already used by the admin pages, the admin
+   layout and the modal/dashboard modules — not a new convention.
+   ───────────────────────────────────────────────────────────── */
+
+@media (max-width: 600px) {
+  .list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    width: 100%;
+    max-width: 100%;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  /* Comfortable touch targets for the row actions. */
+  .actions :global(button) {
+    min-width: 34px;
+    min-height: 34px;
+  }
+}

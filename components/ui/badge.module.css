@@ -1,0 +1,77 @@
+/* ── Badge System ─────────────────────────────────────── */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  line-height: 1.4;
+}
+
+.success {
+  background: rgba(5, 150, 105, 0.1);
+  color: #059669;
+  border: 1px solid rgba(5, 150, 105, 0.2);
+}
+
+.warning {
+  background: rgba(217, 119, 6, 0.1);
+  color: #d97706;
+  border: 1px solid rgba(217, 119, 6, 0.2);
+}
+
+.danger {
+  background: rgba(220, 38, 38, 0.1);
+  color: #dc2626;
+  border: 1px solid rgba(220, 38, 38, 0.2);
+}
+
+.info {
+  background: rgba(21, 97, 109, 0.1);
+  color: #15616d;
+  border: 1px solid rgba(21, 97, 109, 0.2);
+}
+
+.neutral {
+  background: rgba(0, 0, 0, 0.04);
+  color: color-mix(in srgb, var(--foreground) 60%, var(--muted));
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+/* ── Dark mode ─────────────────────────────────────── */
+
+:global(html.dark) .success {
+  background: rgba(52, 211, 153, 0.12);
+  color: #34d399;
+  border-color: rgba(52, 211, 153, 0.2);
+}
+
+:global(html.dark) .warning {
+  background: rgba(251, 191, 36, 0.12);
+  color: #fbbf24;
+  border-color: rgba(251, 191, 36, 0.2);
+}
+
+:global(html.dark) .danger {
+  background: rgba(248, 113, 113, 0.12);
+  color: #f87171;
+  border-color: rgba(248, 113, 113, 0.2);
+}
+
+:global(html.dark) .info {
+  background: rgba(92, 184, 178, 0.12);
+  color: #5cb8b2;
+  border-color: rgba(92, 184, 178, 0.2);
+}
+
+:global(html.dark) .neutral {
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.5);
+  border-color: rgba(255, 255, 255, 0.08);
+}

@@ -1,0 +1,212 @@
+/* ── Admin Login Page ─────────────────────────────────────── */
+
+.page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  background: var(--background);
+}
+
+.card {
+  width: 100%;
+  max-width: 26rem;
+  padding: 2.5rem 2rem;
+  background: rgba(255, 255, 255, 0.55);
+  backdrop-filter: blur(16px) saturate(1.6);
+  -webkit-backdrop-filter: blur(16px) saturate(1.6);
+  border-radius: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.9) inset,
+    0 8px 32px rgba(0, 0, 0, 0.06),
+    0 20px 60px -10px rgba(224, 122, 82, 0.12);
+}
+
+.header {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.iconWrap {
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 16px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: #fff;
+  box-shadow: 0 8px 24px -6px rgba(224, 122, 82, 0.4);
+}
+
+.iconWrap svg {
+  width: 26px;
+  height: 26px;
+}
+
+.header h1 {
+  font-family: var(--font-playfair), Georgia, serif;
+  font-size: 1.6rem;
+  font-weight: 800;
+  color: var(--foreground);
+  margin: 0 0 0.4rem;
+}
+
+.header p {
+  font-size: 0.88rem;
+  color: color-mix(in srgb, var(--foreground) 55%, var(--muted));
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.2rem;
+}
+
+.field label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--foreground) 75%, var(--muted));
+  margin-bottom: 0.4rem;
+}
+
+.input {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1.5px solid rgba(21, 97, 109, 0.12);
+  border-radius: 14px;
+  padding: 0 14px;
+  transition: all 0.25s ease;
+}
+
+.input svg {
+  color: color-mix(in srgb, var(--foreground) 40%, var(--muted));
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  opacity: 0.6;
+}
+
+.input input {
+  width: 100%;
+  background: transparent;
+  border: none;
+  padding: 0.85rem 0;
+  font-size: 0.95rem;
+  color: var(--foreground);
+  outline: none;
+  font-family: inherit;
+}
+
+.input input::placeholder {
+  color: color-mix(in srgb, var(--foreground) 35%, transparent);
+}
+
+.input:focus-within {
+  border-color: var(--accent);
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(224, 122, 82, 0.12);
+}
+
+.input:focus-within svg {
+  color: var(--accent);
+  opacity: 1;
+}
+
+.error {
+  margin: 0;
+  padding: 0.6rem 0.8rem;
+  border-radius: 10px;
+  font-size: 0.85rem;
+  color: #dc2626;
+  background: rgba(220, 38, 38, 0.06);
+  border: 1px solid rgba(220, 38, 38, 0.15);
+  text-align: center;
+}
+
+.submitBtn {
+  width: 100%;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  border: none;
+  border-radius: 14px;
+  padding: 0.9rem;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+  box-shadow: 0 4px 16px rgba(224, 122, 82, 0.35);
+  font-family: inherit;
+}
+
+.submitBtn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(224, 122, 82, 0.45);
+}
+
+.submitBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.footer {
+  margin-top: 1.5rem;
+  text-align: center;
+}
+
+.footer p {
+  font-size: 0.78rem;
+  color: color-mix(in srgb, var(--foreground) 40%, var(--muted));
+  margin: 0;
+}
+
+/* ── Dark mode ─────────────────────────────────────── */
+
+:global(html.dark) .card {
+  background: rgba(44, 43, 45, 0.55);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+:global(html.dark) .input {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+:global(html.dark) .input:focus-within {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+:global(html.dark) .input input {
+  color: var(--foreground);
+}

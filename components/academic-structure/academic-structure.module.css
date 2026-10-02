@@ -1,0 +1,403 @@
+/* ── Reusable academic-structure components ────────────────────────
+   Shared by the programme form, the semester card/form and the subject
+   form. Colour tokens are inherited from the admin theme, so these match
+   the existing pages (including dark mode) without introducing any new
+   styling system. */
+
+/* ── Semester card ─────────────────────────────────────── */
+
+.semesterCard {
+  border: 1px solid rgba(21, 97, 109, 0.1);
+  border-radius: 14px;
+  padding: 1rem;
+  background: rgba(255, 255, 255, 0.45);
+  min-width: 0;
+}
+
+.semesterHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.5rem;
+}
+
+.semesterIdentity {
+  min-width: 0;
+}
+
+.semesterTitle {
+  font-size: 0.98rem;
+  font-weight: 700;
+  color: var(--foreground);
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.semesterMeta {
+  margin: 0.15rem 0 0;
+  font-size: 0.78rem;
+  color: color-mix(in srgb, var(--foreground) 50%, var(--muted));
+}
+
+.semesterBadges {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+/* Explains that a whole subtree is effectively unavailable (parent INACTIVE). */
+.statusNote {
+  margin: 0 0 0.75rem;
+  padding: 0.5rem 0.7rem;
+  border-radius: 10px;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: #b45309;
+  background: rgba(217, 119, 6, 0.08);
+  border: 1px solid rgba(217, 119, 6, 0.18);
+}
+
+.rowActions {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+
+.emptyHint {
+  margin: 0 0 0.5rem;
+  padding: 0.4rem 0.2rem;
+  font-size: 0.85rem;
+  color: color-mix(in srgb, var(--foreground) 45%, var(--muted));
+}
+
+.semesterFooter {
+  margin-top: 0.75rem;
+}
+
+/* ── Elective groups ─────────────────────────────────────
+   Options of one group are shown together and labelled as alternatives, so an
+   elective is never read as another compulsory paper. */
+
+.electiveGroup {
+  margin-top: 0.9rem;
+  padding: 0.75rem 0.8rem;
+  border: 1px dashed rgba(21, 97, 109, 0.28);
+  border-radius: 12px;
+  background: rgba(21, 97, 109, 0.03);
+}
+
+.electiveHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.5rem;
+}
+
+.electiveTitle {
+  margin: 0;
+  font-size: 0.86rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--foreground);
+}
+
+/* Non-core classification shown next to a subject name (e.g. Value Added). */
+.categoryChip {
+  display: inline-block;
+  margin-left: 0.4rem;
+  padding: 0.05rem 0.4rem;
+  border-radius: 6px;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #0f766e;
+  background: rgba(21, 97, 109, 0.12);
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+/* ── Subject table (desktop) ───────────────────────────── */
+
+.tableWrapper {
+  overflow-x: auto;
+  min-width: 0;
+}
+
+.subjectTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.84rem;
+}
+
+.subjectTable th {
+  text-align: left;
+  padding: 0.55rem 0.7rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: color-mix(in srgb, var(--foreground) 50%, var(--muted));
+  border-bottom: 1px solid rgba(21, 97, 109, 0.08);
+  white-space: nowrap;
+}
+
+.subjectTable td {
+  padding: 0.55rem 0.7rem;
+  border-bottom: 1px solid rgba(21, 97, 109, 0.05);
+  color: var(--foreground);
+  vertical-align: middle;
+}
+
+.subjectTable tbody tr:hover {
+  background: rgba(21, 97, 109, 0.03);
+}
+
+.nameCell {
+  font-weight: 600;
+}
+
+.monoCell {
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.assessmentCell {
+  white-space: nowrap;
+}
+
+.statusBadge {
+  cursor: default;
+}
+
+.actionsCell {
+  display: flex;
+  gap: 2px;
+}
+
+.mutedInline {
+  font-size: 0.72rem;
+  color: color-mix(in srgb, var(--foreground) 45%, var(--muted));
+}
+
+/* ── Forms ─────────────────────────────────────── */
+
+.formFields {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.formGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.formField {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.formField label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--foreground) 75%, var(--muted));
+}
+
+.formField input,
+.formField select {
+  background: rgba(255, 255, 255, 0.7);
+  border: 1.5px solid rgba(21, 97, 109, 0.12);
+  border-radius: 10px;
+  padding: 0.6rem 0.8rem;
+  font-size: 0.9rem;
+  color: var(--foreground);
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.2s;
+  min-width: 0;
+}
+
+.formField input:focus,
+.formField select:focus {
+  border-color: var(--accent);
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(224, 122, 82, 0.1);
+}
+
+.formField input:disabled,
+.formField select:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+/* Checkbox row: the shared input rules above stretch text inputs to the full
+   width, which would turn a checkbox into a huge box. */
+.checkboxRow {
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 0.55rem;
+}
+
+.checkboxRow input[type="checkbox"] {
+  width: auto;
+  flex: none;
+  margin-top: 0.15rem;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.checkboxRow label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  cursor: pointer;
+}
+
+/* Total Maximum is derived, never typed. */
+.formField input[readonly] {
+  background: rgba(21, 97, 109, 0.06);
+  font-weight: 700;
+  cursor: default;
+}
+
+.formHint {
+  font-size: 0.75rem;
+  line-height: 1.45;
+  color: color-mix(in srgb, var(--foreground) 45%, var(--muted));
+}
+
+.formFieldset {
+  margin: 0;
+  padding: 0.9rem;
+  border: 1px solid rgba(21, 97, 109, 0.12);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.formFieldset legend {
+  padding: 0 0.4rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: color-mix(in srgb, var(--foreground) 60%, var(--muted));
+}
+
+.formError {
+  margin: 0.75rem 0 0;
+  padding: 0.6rem 0.8rem;
+  border-radius: 10px;
+  font-size: 0.85rem;
+  color: #dc2626;
+  background: rgba(220, 38, 38, 0.06);
+  border: 1px solid rgba(220, 38, 38, 0.15);
+  text-align: center;
+}
+
+.modalTitle {
+  font-family: var(--font-playfair), Georgia, serif;
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--foreground);
+  margin: 0 0 0.25rem;
+  text-align: center;
+}
+
+.modalDesc {
+  margin: 0 0 1rem;
+  font-size: 0.83rem;
+  line-height: 1.5;
+  text-align: center;
+  color: color-mix(in srgb, var(--foreground) 55%, var(--muted));
+}
+
+.modalActions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: center;
+  margin-top: 1.5rem;
+}
+
+/* ── Dark mode ─────────────────────────────────────── */
+
+:global(html.dark) .semesterCard {
+  background: rgba(255, 255, 255, 0.02);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+:global(html.dark) .statusNote {
+  color: #fbbf24;
+  background: rgba(251, 191, 36, 0.1);
+  border-color: rgba(251, 191, 36, 0.2);
+}
+
+:global(html.dark) .electiveGroup {
+  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+:global(html.dark) .categoryChip {
+  color: #5eead4;
+  background: rgba(94, 234, 212, 0.14);
+}
+
+:global(html.dark) .subjectTable th {
+  border-bottom-color: rgba(255, 255, 255, 0.06);
+}
+
+:global(html.dark) .subjectTable td {
+  border-bottom-color: rgba(255, 255, 255, 0.04);
+}
+
+:global(html.dark) .formField input,
+:global(html.dark) .formField select {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+:global(html.dark) .formField input[readonly] {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+:global(html.dark) .formFieldset {
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+/* ── Responsive ───────────────────────────────────────────────
+   Below the project's existing 600px mobile breakpoint the dense subject
+   table is replaced by record cards rendered from the same data, so nothing
+   has to be squeezed into a phone width. The two assessment columns also
+   collapse to a single column so the number inputs stay usable.
+   ───────────────────────────────────────────────────────── */
+
+@media (max-width: 600px) {
+  .semesterCard {
+    padding: 0.85rem;
+  }
+
+  .tableWrapper {
+    display: none;
+  }
+
+  .formGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .rowActions :global(button) {
+    min-height: 34px;
+  }
+}

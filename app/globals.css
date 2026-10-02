@@ -1,0 +1,81 @@
+:root {
+  /* Cream / ember palette — warm light theme with navy + teal accents. */
+  --background: #ffecd1;
+  --foreground: #001524;
+  --muted: #ff7d00;
+  --border: #15616d;
+  --card: #fff;
+  --accent: #e07a52;
+  --accent-2: #f0b285;
+  --code-bg: #15616d;
+  --code-fg: #f2e7de;
+  color-scheme: light;
+  font-size: 16px;
+}
+
+html {
+  height: 100%;
+  background: var(--background);
+}
+
+html,
+body {
+  max-width: 100vw;
+  overflow-x: clip;
+  background: var(--background);
+}
+
+body {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  color: var(--foreground);
+  background: var(--background);
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transition: background 0.3s ease, color 0.3s ease;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* Dark mode overrides */
+html.dark {
+  --background: #17191C;
+  --foreground: #FFF5E8;
+  --muted: #FF6766;
+  --border: rgba(15, 45, 61, 0.6);
+  --card: #2C2B2D;
+  --accent: #FF6766;
+  --accent-2: #FFB173;
+  --code-bg: #0F2D3D;
+  --code-fg: #FFE3B3;
+  color-scheme: dark;
+}
+
+html.dark body {
+  background: var(--background);
+  color: var(--foreground);
+}
+
+/* Global focus glow */
+textarea:focus,
+select:focus {
+  outline: none;
+  box-shadow:
+    0 0 0 3px rgba(255, 103, 102, 0.2),
+    0 0 15px rgba(255, 103, 102, 0.12),
+    0 0 30px rgba(255, 177, 115, 0.08) !important;
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
