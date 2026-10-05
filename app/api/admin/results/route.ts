@@ -11,8 +11,13 @@ import {
   calculateCGPA,
   computeResultFigures,
   curriculumResultFigures,
+  equivalentPercentage,
   formatCgpa,
+  gradeForMarks,
+  semesterResultStatus,
+  subjectStatus,
   type ResultSubject,
+  type SubjectStatusInput,
 } from "@/lib/result-grading";
 import {
   resolveSemester,
@@ -80,6 +85,9 @@ export async function GET(req: Request) {
             semester: result.student.semester,
             academicSession: result.student.academicSession,
             collegeName: result.student.collegeName,
+            fatherName: result.student.fatherName ?? "",
+            motherName: result.student.motherName ?? "",
+            gender: result.student.gender ?? "",
           },
           curriculum: result.curriculum
             ? {
@@ -99,12 +107,14 @@ export async function GET(req: Request) {
             credits: s.credits,
             subjectType: s.subjectType ?? null,
             isBacklog: s.isBacklog,
+            isAbsent: s.isAbsent === true,
           })),
           totalMarks: result.totalMarks,
           maxTotalMarks: result.maxTotalMarks,
           percentage: result.percentage,
           sgpa: result.sgpa ?? null,
           cgpa: result.cgpa,
+          equivalentPercentage: result.equivalentPercentage ?? null,
           resultStatus: result.resultStatus,
           remarks: result.remarks,
           declaredDate: result.declaredDate,
@@ -194,15 +204,6 @@ function isPositiveNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value) && value > 0;
 }
 
-function isPositiveInteger(value: unknown): value is number {
-  return typeof value === "number" && Number.isInteger(value) && value > 0;
-}
-
-function isPercentage(value: unknown): value is number {
-  return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 100;
-}
-
-const VALID_STATUSES = ["PASS", "FAIL", "COMPARTMENT"] as const;
 
 function validateSubject(
   sub: unknown,
@@ -216,17 +217,28 @@ function validateSubject(
 
   const subjectCode = trimString(s.subjectCode);
   const subjectName = trimString(s.subjectName);
-  const grade = trimString(s.grade);
 
   if (!subjectCode) return { ok: false, error: `Subject at index ${index}: subjectCode is required.` };
   if (!subjectName) return { ok: false, error: `Subject at index ${index}: subjectName is required.` };
-  if (!isNonNegativeNumber(s.internalMarks)) return { ok: false, error: `Subject "${subjectCode}": internalMarks must be a non-negative number.` };
-  if (!isNonNegativeNumber(s.externalMarks)) return { ok: false, error: `Subject "${subjectCode}": externalMarks must be a non-negative number.` };
-  if (!isNonNegativeNumber(s.totalMarks)) return { ok: false, error: `Subject "${subjectCode}": totalMarks must be a non-negative number.` };
   if (!isPositiveNumber(s.maxMarks)) return { ok: false, error: `Subject "${subjectCode}": maxMarks must be a positive number.` };
-  if (!grade) return { ok: false, error: `Subject at index ${index}: grade is required.` };
-  if (!isNonNegativeNumber(s.gradePoint)) return { ok: false, error: `Subject "${subjectCode}": gradePoint must be a non-negative number.` };
-  if (!isPositiveInteger(s.credits)) return { ok: false, error: `Subject "${subjectCode}": credits must be a positive integer.` };
+  if (!isNonNegativeNumber(s.credits)) return { ok: false, error: `Subject "${subjectCode}": credits must be a non-negative number.` };
+
+  // Absence is the ONLY way a subject may omit its component marks.
+  const isAbsent = s.isAbsent === true;
+  if (!isAbsent && !isNonNegativeNumber(s.internalMarks)) return { ok: false, error: `Subject "${subjectCode}": internalMarks must be a non-negative number.` };
+  if (!isAbsent && !isNonNegativeNumber(s.externalMarks)) return { ok: false, error: `Subject "${subjectCode}": externalMarks must be a non-negative number.` };
+
+  const internalMarks = isAbsent ? 0 : (s.internalMarks as number);
+  const externalMarks = isAbsent ? 0 : (s.externalMarks as number);
+  const totalMarks = internalMarks + externalMarks;
+
+  if (totalMarks > (s.maxMarks as number)) {
+    return { ok: false, error: `Subject "${subjectCode}": internal + external marks cannot exceed the maximum (${s.maxMarks}).` };
+  }
+
+  // Grade and grade point are DERIVED here. Any client-supplied grade,
+  // gradePoint, totalMarks or percentage is ignored by construction.
+  const { grade, gradePoint } = gradeForMarks(totalMarks, isAbsent);
 
   // Snapshot passthrough: keep the curriculum's subject type when the request
   // carries one (an unknown value is dropped rather than stored).
@@ -238,17 +250,36 @@ function validateSubject(
   return {
     ok: true,
     subject: {
-      subjectCode, subjectName,
-      internalMarks: s.internalMarks, externalMarks: s.externalMarks,
-      totalMarks: s.totalMarks, maxMarks: s.maxMarks,
-      grade, gradePoint: s.gradePoint, credits: s.credits,
+      subjectCode,
+      subjectName,
+      internalMarks,
+      externalMarks,
+      totalMarks,
+      maxMarks: s.maxMarks as number,
+      grade,
+      gradePoint,
+      credits: s.credits as number,
       subjectType,
       isBacklog: s.isBacklog === true,
+      isAbsent,
     },
   };
 }
 
-/* ── Curriculum resolution (Phase 3A) ───────────────────────────── */
+/**
+ * Derive the semester result status from the subjects (server-authoritative).
+ *
+ *   FAIL when any subject is "Fail" or "Absent"; PASS otherwise. A Compartment
+ *   subject does NOT fail the semester. The client's resultStatus is never read.
+ */
+function derivedResultStatus(subjects: readonly unknown[]): "PASS" | "FAIL" {
+  return semesterResultStatus(
+    subjects.map((subject) => subjectStatus(subject as SubjectStatusInput))
+  );
+}
+
+/* ── Curriculum resolution (Phase 3A) ───────────────────────── */
+
 
 interface CurriculumInput {
   programmeCode: string;
@@ -384,15 +415,19 @@ async function buildCurriculumSubjects(
         credits: meta.credits,
         maxMarks,
         subjectType: meta.subjectType,
+        // Component maxima come from the curriculum, never the request, so the
+        // server can validate internal/external against the subject's own split.
+        internalMax: meta.assessment?.internalMax ?? null,
+        externalMax: meta.assessment?.externalMax ?? null,
+        practicalMax: meta.assessment?.practicalMax ?? null,
       },
       {
         internalMarks: raw.internalMarks,
         externalMarks: raw.externalMarks,
-        grade: raw.grade,
+        // Absence is an explicit input; grade/gradePoint/total/percentage
+        // are NEVER read from the request.
+        isAbsent: raw.isAbsent,
         isBacklog: raw.isBacklog,
-        gradePoint: raw.gradePoint,
-        totalMarks: raw.totalMarks,
-        percentage: raw.percentage,
       }
     );
     if (!built.ok) {
@@ -489,6 +524,7 @@ interface CgpaLeanResult {
   curriculum: { programmeCode: string; semesterNumber: number } | null;
   subjects: { credits: number; gradePoint: number }[];
   cgpa: string | null;
+  equivalentPercentage: number | null;
 }
 
 /**
@@ -531,7 +567,11 @@ async function findDuplicateSemester(
 }
 
 type CgpaSyncResult =
-  | { ok: true; bySemester: Map<number, string | null> }
+  | {
+      ok: true;
+      bySemester: Map<number, string | null>;
+      equivalentBySemester: Map<number, number | null>;
+    }
   | { ok: false; duplicateSemester: number };
 
 /**
@@ -567,6 +607,7 @@ async function syncCumulativeCgpa(
   }
 
   const bySemester = new Map<number, string | null>();
+  const equivalentBySemester = new Map<number, number | null>();
   const included: { semesterNumber: number; subjects: { credits: number; gradePoint: number }[] }[] =
     [];
   const updates: Promise<unknown>[] = [];
@@ -578,18 +619,31 @@ async function syncCumulativeCgpa(
     included.push({ semesterNumber, subjects: doc.subjects ?? [] });
 
     // Credit-weighted CGPA through every semester included so far.
-    const cgpa = formatCgpa(calculateCGPA(included));
+    const cgpaNumber = calculateCGPA(included);
+    const cgpa = formatCgpa(cgpaNumber);
     bySemester.set(semesterNumber, cgpa);
 
-    // Only write when the stored value actually changed.
-    if ((doc.cgpa ?? null) !== cgpa) {
-      updates.push(Result.updateOne({ _id: doc._id }, { $set: { cgpa } }));
+    // Equivalent percentage is always derived from the cumulative CGPA.
+    const equivalent = equivalentPercentage(cgpaNumber);
+    equivalentBySemester.set(semesterNumber, equivalent);
+
+    // Only write when a stored value actually changed.
+    if (
+      (doc.cgpa ?? null) !== cgpa ||
+      (doc.equivalentPercentage ?? null) !== equivalent
+    ) {
+      updates.push(
+        Result.updateOne(
+          { _id: doc._id },
+          { $set: { cgpa, equivalentPercentage: equivalent } }
+        )
+      );
     }
   }
 
   if (updates.length > 0) await Promise.all(updates);
 
-  return { ok: true, bySemester };
+  return { ok: true, bySemester, equivalentBySemester };
 }
 
 /** Shared 409 for an ambiguous duplicate semester. */
@@ -621,12 +675,18 @@ async function validateResultBody(
 
   const student = b.student as Record<string, unknown>;
   const studentFields = ["name", "rollNumber", "enrollmentNumber", "course", "semester", "academicSession", "collegeName"] as const;
+  // Optional identity fields: stored on the snapshot, may be left blank (the
+  // printed statement then shows an em dash). Never invented, never required.
+  const optionalStudentFields = ["fatherName", "motherName", "gender"] as const;
 
   const cleanedStudent: Record<string, string> = {};
   for (const field of studentFields) {
     const val = trimString(student[field]);
     if (!val) return { ok: false, error: `Student field "${field}" is required.` };
     cleanedStudent[field] = val;
+  }
+  for (const field of optionalStudentFields) {
+    cleanedStudent[field] = trimString(student[field]) ?? "";
   }
 
   // ── Subjects ──────────────────────────────────────────────
@@ -667,6 +727,7 @@ async function validateResultBody(
   let percentage: number;
   let sgpa: number | null;
   let cgpa: string | null;
+  let equivalent: number | null;
 
   if (curriculumSnapshot) {
     // Phase 3B/3C: curriculum-linked headline figures are computed from the
@@ -682,26 +743,26 @@ async function validateResultBody(
     percentage = figures.percentage;
     sgpa = figures.sgpa;
     cgpa = null;
+    equivalent = null;
   } else {
-    // Legacy (no curriculum snapshot): keep the existing client-figure flow.
-    if (!isNonNegativeNumber(b.totalMarks)) return { ok: false, error: "totalMarks must be a non-negative number." };
-    if (!isPositiveNumber(b.maxTotalMarks)) return { ok: false, error: "maxTotalMarks must be a positive number." };
-    if (!isPercentage(b.percentage)) return { ok: false, error: "percentage must be between 0 and 100." };
-
-    const legacyCgpa = trimString(b.cgpa);
-    if (!legacyCgpa) return { ok: false, error: "cgpa is required." };
-
-    totalMarks = b.totalMarks;
-    maxTotalMarks = b.maxTotalMarks;
-    percentage = b.percentage;
-    sgpa = typeof b.sgpa === "number" && Number.isFinite(b.sgpa) ? b.sgpa : null;
-    cgpa = legacyCgpa;
+    // Legacy (no curriculum snapshot): the client may still describe its own
+    // subjects, but EVERY derived figure is computed here. Client-supplied
+    // totalMarks, maxTotalMarks, percentage, sgpa and cgpa are ignored.
+    const legacyFigures = computeResultFigures(
+      cleanedSubjects as unknown as Parameters<typeof computeResultFigures>[0]
+    );
+    totalMarks = legacyFigures.totalMarks;
+    maxTotalMarks = legacyFigures.maxTotalMarks;
+    percentage = legacyFigures.percentage;
+    sgpa = legacyFigures.sgpa;
+    cgpa = null;
+    equivalent = null;
   }
 
-  const resultStatus = trimString(b.resultStatus)?.toUpperCase();
-  if (!resultStatus || !VALID_STATUSES.includes(resultStatus as typeof VALID_STATUSES[number])) {
-    return { ok: false, error: `resultStatus must be one of: ${VALID_STATUSES.join(", ")}.` };
-  }
+  // The semester result status is DERIVED here from the subjects — FAIL when a
+  // subject is Fail/Absent, otherwise PASS. A Compartment subject never decides
+  // the semester, and a client-supplied resultStatus is ignored by construction.
+  const resultStatus = derivedResultStatus(cleanedSubjects);
 
   const remarks = trimString(b.remarks) ?? "";
   const declaredDate = trimString(b.declaredDate);
@@ -714,7 +775,7 @@ async function validateResultBody(
       curriculum: curriculumSnapshot,
       subjects: cleanedSubjects,
       totalMarks, maxTotalMarks,
-      percentage, sgpa, cgpa,
+      percentage, sgpa, cgpa, equivalentPercentage: equivalent,
       resultStatus, remarks, declaredDate,
     },
   };
@@ -780,6 +841,8 @@ export async function POST(req: Request) {
       }
       // Store the authoritative cumulative value on the created Result.
       result.cgpa = sync.bySemester.get(curriculum.semesterNumber) ?? null;
+      result.equivalentPercentage =
+        sync.equivalentBySemester.get(curriculum.semesterNumber) ?? null;
     }
 
     return NextResponse.json({
@@ -853,8 +916,12 @@ export async function PUT(req: Request) {
     // Apply updates from the body
     if (body.student && typeof body.student === "object") {
       const student = body.student as Record<string, string>;
+      const optionalStudentFields = new Set(["fatherName", "motherName", "gender"]);
       for (const [key, value] of Object.entries(student)) {
-        if (typeof value === "string" && value.trim()) {
+        if (typeof value !== "string") continue;
+        // Optional identity fields may be CLEARED, so an empty value is applied
+        // for them; every other field keeps the existing non-empty-only rule.
+        if (value.trim() || optionalStudentFields.has(key)) {
           (result.student as Record<string, unknown>)[key] = value.trim();
         }
       }
@@ -918,13 +985,21 @@ export async function PUT(req: Request) {
       result.percentage = figures.percentage;
       result.sgpa = figures.sgpa;
     } else {
-      if (typeof body.totalMarks === "number") result.totalMarks = body.totalMarks;
-      if (typeof body.maxTotalMarks === "number") result.maxTotalMarks = body.maxTotalMarks;
-      if (typeof body.percentage === "number") result.percentage = body.percentage;
-      if (typeof body.sgpa === "number") result.sgpa = body.sgpa;
-      if (typeof body.cgpa === "string") result.cgpa = body.cgpa;
+      // Legacy: derive every figure from the stored subjects. The client
+      // totalMarks/maxTotalMarks/percentage/sgpa/cgpa are never trusted.
+      const figures = computeResultFigures(
+        result.subjects as unknown as Parameters<typeof computeResultFigures>[0]
+      );
+      result.totalMarks = figures.totalMarks;
+      result.maxTotalMarks = figures.maxTotalMarks;
+      result.percentage = figures.percentage;
+      result.sgpa = figures.sgpa;
+      result.cgpa = null;
+      result.equivalentPercentage = null;
     }
-    if (typeof body.resultStatus === "string") result.resultStatus = body.resultStatus as "PASS" | "FAIL" | "COMPARTMENT";
+    // Server-authoritative: the semester status always follows the stored
+    // subjects. A client-supplied resultStatus is ignored.
+    result.resultStatus = derivedResultStatus(result.subjects);
     if (typeof body.remarks === "string") result.remarks = body.remarks;
     if (typeof body.declaredDate === "string") result.declaredDate = body.declaredDate;
 
@@ -951,6 +1026,8 @@ export async function PUT(req: Request) {
       // Reflect the authoritative cumulative value in the response without a
       // second write (the sync already persisted it).
       result.cgpa = sync.bySemester.get(effectiveCurriculum.semesterNumber) ?? null;
+      result.equivalentPercentage =
+        sync.equivalentBySemester.get(effectiveCurriculum.semesterNumber) ?? null;
     } else {
       await result.save();
     }

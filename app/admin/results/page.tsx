@@ -19,8 +19,8 @@
  *
  * Security:
  * - All endpoints are protected by authenticateAdmin() (JWT + role check)
- * - Server-side validation ensures required fields, numeric ranges, and
- *   valid result statuses (PASS/FAIL/COMPARTMENT)
+ * - Server-side validation ensures required fields and numeric ranges; the
+ *   semester result status is derived by the server (never entered)
  * - Subject marks, grades, and credits are validated at the schema level
  *
  * Dependencies:
@@ -41,7 +41,7 @@ import EmptyState from "@/components/empty-state";
 import ErrorState from "@/components/error-state";
 import DocumentViewport from "@/components/results/document-viewport";
 import ResultDocument from "@/components/results/result-document";
-import type { StatementOfMarks } from "@/components/results/types";
+import { GENDER_OPTIONS, type StatementOfMarks } from "@/components/results/types";
 import RecordList, { RecordCard, RecordField } from "@/components/ui/record-list";
 import SearchableSelect from "@/components/ui/searchable-select";
 import {
@@ -55,11 +55,12 @@ import {
   type ProgrammeStructureRecord,
   type ProgrammeStructureSummary,
 } from "@/components/academic-structure/types";
-import { effectiveStatus } from "@/lib/programme-structure";
+import { effectiveStatus, type SubjectType } from "@/lib/programme-structure";
 import {
   computeSgpa,
-  gradePointForPercentage,
-  subjectPercentage,
+  gradeForMarks,
+  semesterResultStatus,
+  subjectStatus,
 } from "@/lib/result-grading";
 import styles from "./page.module.css";
 
@@ -81,11 +82,22 @@ interface Pagination { page: number; limit: number; total: number; totalPages: n
 /** One selectable alternative inside an elective group. */
 interface ElectiveOption {
   subjectCode: string; subjectName: string; credits: string; subjectType: string; maxMarks: string;
+  internalMax: string; externalMax: string; practicalMax: string;
 }
 
 interface SubjectEntry {
   subjectCode: string; subjectName: string; internalMarks: string; externalMarks: string;
   totalMarks: string; maxMarks: string; grade: string; gradePoint: string; credits: string;
+  /** True when the candidate was absent (stored as grade AB, 0 points). */
+  isAbsent: boolean;
+  /**
+   * Curriculum component maxima (read-only snapshot). Used to cap the + / -
+   * controls and to validate typed marks. A practical maximum is entered in the
+   * External field, so it is added to the external ceiling.
+   */
+  internalMax: string;
+  externalMax: string;
+  practicalMax: string;
   /**
    * Curriculum snapshot metadata from ProgrammeStructure. Read-only in the UI —
    * the admin never types a subject's code, name, credits, type or maximum.
@@ -104,20 +116,22 @@ interface FormState {
   /** Numeric semester within the selected structure. */
   semesterNumber: string;
   studentName: string; rollNumber: string; enrollmentNumber: string;
+  /** Optional identity fields snapshotted onto the result (may be blank). */
+  fatherName: string; motherName: string; gender: string;
   /** Display values resolved from the structure on the server. */
   course: string; semester: string; academicSession: string;
   collegeName: string; subjects: SubjectEntry[];
   /** Read-only, server-authoritative headline figures (never typed). */
-  totalMarks: string; maxTotalMarks: string; percentage: string; sgpa: string; cgpa: string;
+  totalMarks: string; maxTotalMarks: string; percentage: string; sgpa: string; cgpa: string; equivalentPercentage: string;
   resultStatus: string; remarks: string; declaredDate: string;
 }
 
 function blankSubject(): SubjectEntry {
-  return { subjectCode: "", subjectName: "", internalMarks: "", externalMarks: "", totalMarks: "", maxMarks: "", grade: "", gradePoint: "", credits: "", subjectType: "", electiveGroup: "", electiveOptions: [], isBacklog: false };
+  return { subjectCode: "", subjectName: "", internalMarks: "", externalMarks: "", totalMarks: "", maxMarks: "", grade: "", gradePoint: "", credits: "", subjectType: "", electiveGroup: "", electiveOptions: [], isBacklog: false, isAbsent: false, internalMax: "", externalMax: "", practicalMax: "" };
 }
 
 function blankForm(): FormState {
-  return { programmeCode: "", semesterNumber: "", studentName: "", rollNumber: "", enrollmentNumber: "", course: "", semester: "", academicSession: "", collegeName: "", subjects: [], totalMarks: "", maxTotalMarks: "", percentage: "", sgpa: "", cgpa: "", resultStatus: "", remarks: "", declaredDate: "" };
+  return { programmeCode: "", semesterNumber: "", studentName: "", rollNumber: "", enrollmentNumber: "", fatherName: "", motherName: "", gender: "", course: "", semester: "", academicSession: "", collegeName: "", subjects: [], totalMarks: "", maxTotalMarks: "", percentage: "", sgpa: "", cgpa: "", equivalentPercentage: "", resultStatus: "", remarks: "", declaredDate: "" };
 }
 
 /* ── Curriculum → subject rows (Phase 3A) ───────────────────────── */
@@ -135,11 +149,15 @@ function entryFromSubject(subject: CurriculumSubject): SubjectEntry {
     credits: String(subject.credits),
     subjectType: subject.subjectType,
     maxMarks: String(subject.assessment.totalMax),
+    internalMax: String(subject.assessment.internalMax),
+    externalMax: String(subject.assessment.externalMax),
+    practicalMax: String(subject.assessment.practicalMax),
     internalMarks: "",
     externalMarks: "",
     totalMarks: "0",
     grade: "",
     gradePoint: "",
+    isAbsent: false,
     electiveGroup: "",
     electiveOptions: [],
     isBacklog: false,
@@ -153,6 +171,9 @@ function optionFromSubject(subject: CurriculumSubject): ElectiveOption {
     credits: String(subject.credits),
     subjectType: subject.subjectType,
     maxMarks: String(subject.assessment.totalMax),
+    internalMax: String(subject.assessment.internalMax),
+    externalMax: String(subject.assessment.externalMax),
+    practicalMax: String(subject.assessment.practicalMax),
   };
 }
 
@@ -196,9 +217,6 @@ function buildCurriculumEntries(
 
 /* ── Add Result form helpers ────────────────────────────────────── */
 
-/** Grade-letter rule mirrored from models/Result.ts. */
-const GRADE_PATTERN = /^[A-Za-z+#-]+$/;
-
 /** True when a form string holds a real number (not empty / not junk). */
 function isNumeric(value: string): boolean {
   return value.trim() !== "" && Number.isFinite(Number(value));
@@ -212,7 +230,30 @@ function num(value: string): number {
 
 /** A subject's total is always internal + external. */
 function subjectTotal(sub: SubjectEntry): number {
+  if (sub.isAbsent) return 0;
   return num(sub.internalMarks) + num(sub.externalMarks);
+}
+
+/**
+ * Upper bound for the Internal field — the curriculum's configured internal
+ * maximum. Falls back to the total maximum only when no split is available
+ * (a subject created before the curriculum integration).
+ */
+function internalLimitFor(sub: SubjectEntry): number {
+  return isNumeric(sub.internalMax) ? num(sub.internalMax) : num(sub.maxMarks);
+}
+
+/**
+ * Upper bound for the External field. The Result stores only internal + external
+ * marks, so a practical component is entered in the External field and its
+ * maximum raises this ceiling; for a standard 25/75 paper this is exactly 75.
+ * Falls back to the total maximum when no split is available.
+ */
+function externalLimitFor(sub: SubjectEntry): number {
+  if (isNumeric(sub.externalMax) || isNumeric(sub.practicalMax)) {
+    return num(sub.externalMax) + num(sub.practicalMax);
+  }
+  return num(sub.maxMarks);
 }
 
 /** Result-level totals derived from the subject list. */
@@ -224,19 +265,38 @@ function calcResultTotals(subjects: SubjectEntry[]) {
   return { totalMarks, maxTotalMarks, percentage };
 }
 
+/**
+ * Preview the server-derived status of one subject from the form row. This only
+ * mirrors the rule for the admin's benefit — the API recomputes and stores the
+ * authoritative value, so the client can never override it.
+ */
+function formSubjectStatus(sub: SubjectEntry) {
+  return subjectStatus({
+    totalMarks: subjectTotal(sub),
+    maxMarks: num(sub.maxMarks),
+    subjectType: (sub.subjectType || null) as SubjectType | null,
+    isAbsent: sub.isAbsent,
+    isBacklog: sub.isBacklog,
+  });
+}
+
+/** Preview the server-derived semester result status for a form. */
+function formSemesterStatus(form: FormState): "PASS" | "FAIL" {
+  return semesterResultStatus(form.subjects.map(formSubjectStatus));
+}
+
 /** Map one subject form entry onto the API / model subject shape. */
 function buildSubjectPayload(sub: SubjectEntry) {
+  // Raw inputs only: grade, grade point and total are DERIVED by the server.
   return {
     subjectCode: sub.subjectCode.trim(),
     subjectName: sub.subjectName.trim(),
-    internalMarks: num(sub.internalMarks),
-    externalMarks: num(sub.externalMarks),
-    totalMarks: subjectTotal(sub),
+    internalMarks: sub.isAbsent ? 0 : num(sub.internalMarks),
+    externalMarks: sub.isAbsent ? 0 : num(sub.externalMarks),
     maxMarks: num(sub.maxMarks),
-    grade: sub.grade.trim(),
-    gradePoint: num(sub.gradePoint),
     credits: num(sub.credits),
     subjectType: sub.subjectType || null,
+    isAbsent: sub.isAbsent,
     isBacklog: sub.isBacklog,
   };
 }
@@ -257,6 +317,9 @@ function buildCreateRequestBody(form: FormState) {
       name: form.studentName.trim(),
       rollNumber: form.rollNumber.trim(),
       enrollmentNumber: form.enrollmentNumber.trim(),
+      fatherName: form.fatherName.trim(),
+      motherName: form.motherName.trim(),
+      gender: form.gender.trim(),
       // Display values — the server re-resolves them from the structure.
       course: form.course.trim(),
       semester: form.semester.trim(),
@@ -267,8 +330,8 @@ function buildCreateRequestBody(form: FormState) {
     totalMarks: totals.totalMarks,
     maxTotalMarks: totals.maxTotalMarks,
     percentage: totals.percentage,
-    // SGPA and CGPA are never sent from the form: the server calculates both.
-    resultStatus: form.resultStatus,
+    // SGPA, CGPA and the semester result status are never sent from the form:
+    // the server calculates all of them from the subjects.
     remarks: form.remarks.trim(),
     declaredDate: form.declaredDate.trim(),
   };
@@ -316,21 +379,25 @@ function validateCreateForm(form: FormState): string {
   for (let i = 0; i < form.subjects.length; i++) {
     const sub = form.subjects[i];
     const at = sub.subjectCode || `Subject ${i + 1}`;
+    // Absence is a valid, explicit state: its marks are irrelevant (the server
+    // clears them), so no mark validation applies to an absent subject.
+    if (sub.isAbsent) continue;
     if (!isNumeric(sub.internalMarks) || num(sub.internalMarks) < 0) {
       return `${at}: internal marks must be 0 or more.`;
     }
     if (!isNumeric(sub.externalMarks) || num(sub.externalMarks) < 0) {
       return `${at}: external marks must be 0 or more.`;
     }
+    const internalLimit = internalLimitFor(sub);
+    if (num(sub.internalMarks) > internalLimit) {
+      return `${at}: internal marks cannot exceed the curriculum internal maximum (${internalLimit}).`;
+    }
+    const externalLimit = externalLimitFor(sub);
+    if (num(sub.externalMarks) > externalLimit) {
+      return `${at}: external marks cannot exceed the curriculum external maximum (${externalLimit}).`;
+    }
     if (subjectTotal(sub) > num(sub.maxMarks)) {
       return `${at}: internal + external marks cannot exceed the curriculum maximum (${sub.maxMarks}).`;
-    }
-    if (!sub.grade.trim()) return `${at}: grade is required.`;
-    if (!GRADE_PATTERN.test(sub.grade.trim())) {
-      return `${at}: grade must be a letter grade (e.g. A, B+, F).`;
-    }
-    if (!isNumeric(sub.gradePoint) || num(sub.gradePoint) < 0) {
-      return `${at}: grade point must be 0 or more.`;
     }
   }
 
@@ -341,10 +408,8 @@ function validateCreateForm(form: FormState): string {
   if (totals.percentage > 100) {
     return "Total marks cannot exceed the maximum total marks.";
   }
-  if (!form.resultStatus) return "Result status is required.";
-  if (form.subjects.some((sub) => sub.isBacklog) && form.resultStatus !== "COMPARTMENT") {
-    return "A subject is marked as compartment/backlog — set the result status to COMPARTMENT.";
-  }
+  // The result status is never entered: the server derives it from the subjects
+  // (Fail if any subject is Fail/Absent; a Compartment subject never fails it).
   if (!form.declaredDate.trim()) return "Declared date is required.";
   return "";
 }
@@ -600,6 +665,9 @@ export default function AdminResultsPage() {
           credits: option.credits,
           subjectType: option.subjectType,
           maxMarks: option.maxMarks,
+          internalMax: option.internalMax,
+          externalMax: option.externalMax,
+          practicalMax: option.practicalMax,
           internalMarks: "",
           externalMarks: "",
           totalMarks: "0",
@@ -617,6 +685,22 @@ export default function AdminResultsPage() {
     setter((prev) => ({ ...prev, [field]: value }));
   }
 
+  /**
+   * Toggle a subject's absence. The entered marks are CLEARED either way, so a
+   * normal → absent change discards what was typed and an absent → normal change
+   * starts from a blank (never a stale) value.
+   */
+  function toggleAbsent(index: number, absent: boolean) {
+    setCreateForm((prev) => ({
+      ...prev,
+      subjects: prev.subjects.map((sub, i) =>
+        i === index
+          ? { ...sub, isAbsent: absent, internalMarks: "", externalMarks: "", totalMarks: "0" }
+          : sub
+      ),
+    }));
+  }
+
   /** Update one subject field and keep its derived total in sync. */
   function updateSubject(index: number, field: keyof SubjectEntry, value: string | boolean) {
     setCreateForm((prev) => ({
@@ -632,20 +716,16 @@ export default function AdminResultsPage() {
 
   /**
    * Toggle a subject's compartment/backlog flag.
-   * Flagging a subject drives the result status to COMPARTMENT (the admin can
-   * still change it afterwards); clearing the last flag clears it again.
+   * The flag is reported on the subject row only; it never changes the semester
+   * result status (the server derives that from the subject statuses).
    */
   function toggleBacklog(index: number) {
-    setCreateForm((prev) => {
-      const subjects = prev.subjects.map((sub, i) =>
+    setCreateForm((prev) => ({
+      ...prev,
+      subjects: prev.subjects.map((sub, i) =>
         i === index ? { ...sub, isBacklog: !sub.isBacklog } : sub
-      );
-      const anyBacklog = subjects.some((sub) => sub.isBacklog);
-      let resultStatus = prev.resultStatus;
-      if (anyBacklog && resultStatus !== "COMPARTMENT") resultStatus = "COMPARTMENT";
-      else if (!anyBacklog && resultStatus === "COMPARTMENT") resultStatus = "";
-      return { ...prev, subjects, resultStatus };
-    });
+      ),
+    }));
   }
 
   /**
@@ -655,9 +735,9 @@ export default function AdminResultsPage() {
    */
   function buildEditRequestBody(form: FormState) {
     return {
-      student: { name: form.studentName.trim(), rollNumber: form.rollNumber.trim(), enrollmentNumber: form.enrollmentNumber.trim(), course: form.course.trim(), semester: form.semester.trim(), academicSession: form.academicSession.trim(), collegeName: form.collegeName.trim() },
-      subjects: form.subjects.map((sub) => ({ subjectCode: sub.subjectCode.trim(), subjectName: sub.subjectName.trim(), internalMarks: Number(sub.internalMarks), externalMarks: Number(sub.externalMarks), totalMarks: Number(sub.totalMarks), maxMarks: Number(sub.maxMarks), grade: sub.grade.trim(), gradePoint: Number(sub.gradePoint), credits: Number(sub.credits), subjectType: sub.subjectType || null, isBacklog: sub.isBacklog })),
-      totalMarks: Number(form.totalMarks), maxTotalMarks: Number(form.maxTotalMarks), percentage: Number(form.percentage), cgpa: form.cgpa.trim(), resultStatus: form.resultStatus, remarks: form.remarks.trim(), declaredDate: form.declaredDate.trim(),
+      student: { name: form.studentName.trim(), rollNumber: form.rollNumber.trim(), enrollmentNumber: form.enrollmentNumber.trim(), fatherName: form.fatherName.trim(), motherName: form.motherName.trim(), gender: form.gender.trim(), course: form.course.trim(), semester: form.semester.trim(), academicSession: form.academicSession.trim(), collegeName: form.collegeName.trim() },
+      subjects: form.subjects.map((sub) => ({ subjectCode: sub.subjectCode.trim(), subjectName: sub.subjectName.trim(), internalMarks: sub.isAbsent ? 0 : Number(sub.internalMarks), externalMarks: sub.isAbsent ? 0 : Number(sub.externalMarks), maxMarks: Number(sub.maxMarks), credits: Number(sub.credits), subjectType: sub.subjectType || null, isAbsent: sub.isAbsent, isBacklog: sub.isBacklog })),
+      totalMarks: Number(form.totalMarks), maxTotalMarks: Number(form.maxTotalMarks), percentage: Number(form.percentage), cgpa: form.cgpa.trim(), remarks: form.remarks.trim(), declaredDate: form.declaredDate.trim(),
     };
   }
 
@@ -673,7 +753,14 @@ export default function AdminResultsPage() {
       if (!data.success) { setCreateError(data.message || "Failed to create result."); return; }
       setCreateSuccess("Result created!");
       // Show the server-calculated cumulative value before the modal closes.
-      setCreateForm((prev) => ({ ...prev, cgpa: data.result?.cgpa ?? "" }));
+      setCreateForm((prev) => ({
+        ...prev,
+        cgpa: data.result?.cgpa ?? "",
+        equivalentPercentage:
+          data.result?.equivalentPercentage != null
+            ? String(data.result.equivalentPercentage)
+            : "",
+      }));
       setTimeout(() => { setShowCreateForm(false); setCreateSuccess(""); setCreateForm(blankForm()); fetchResults(1); }, 1000);
     } catch { setCreateError("Unable to connect to server."); } finally { setCreateLoading(false); }
   }
@@ -692,14 +779,15 @@ export default function AdminResultsPage() {
           // existing Result in place (the stored snapshot is preserved as-is).
           programmeCode: "", semesterNumber: "",
           studentName: r.student.name, rollNumber: r.student.rollNumber, enrollmentNumber: r.student.enrollmentNumber,
+          fatherName: r.student.fatherName || "", motherName: r.student.motherName || "", gender: r.student.gender || "",
           course: r.student.course, semester: r.student.semester, academicSession: r.student.academicSession || "", collegeName: r.student.collegeName || "",
           subjects: r.subjects.length > 0 ? r.subjects.map((s: Record<string, unknown>) => ({
             subjectCode: String(s.subjectCode), subjectName: String(s.subjectName), internalMarks: String(s.internalMarks), externalMarks: String(s.externalMarks),
             totalMarks: String(s.totalMarks), maxMarks: String(s.maxMarks), grade: String(s.grade), gradePoint: String(s.gradePoint), credits: String(s.credits),
-            subjectType: typeof s.subjectType === "string" ? s.subjectType : "", electiveGroup: "", electiveOptions: [], isBacklog: Boolean(s.isBacklog),
+            subjectType: typeof s.subjectType === "string" ? s.subjectType : "", electiveGroup: "", electiveOptions: [], isBacklog: Boolean(s.isBacklog), isAbsent: Boolean(s.isAbsent),
           })) : [blankSubject()],
           totalMarks: String(r.totalMarks), maxTotalMarks: String(r.maxTotalMarks), percentage: String(r.percentage),
-          sgpa: r.sgpa != null ? String(r.sgpa) : "", cgpa: r.cgpa ?? "",
+          sgpa: r.sgpa != null ? String(r.sgpa) : "", cgpa: r.cgpa ?? "", equivalentPercentage: r.equivalentPercentage != null ? String(r.equivalentPercentage) : "",
           resultStatus: r.resultStatus, remarks: r.remarks || "", declaredDate: r.declaredDate,
         });
       }
@@ -778,14 +866,15 @@ export default function AdminResultsPage() {
   // SGPA preview mirrors the server rule exactly (including its grade-point
   // bands), so the figure shown can never disagree with what is saved.
   const createTotals = calcResultTotals(createForm.subjects);
+  // Server-derived previews. The admin never selects either value.
+  const createSemesterStatus = formSemesterStatus(createForm);
+  const editFormSemesterStatus = formSemesterStatus(editForm);
   const createSgpa = useMemo(
     () =>
       computeSgpa(
         createForm.subjects.map((sub) => ({
           credits: num(sub.credits),
-          gradePoint: gradePointForPercentage(
-            subjectPercentage(subjectTotal(sub), num(sub.maxMarks))
-          ),
+          gradePoint: gradeForMarks(subjectTotal(sub), sub.isAbsent).gradePoint,
         }))
       ),
     [createForm.subjects]
@@ -815,7 +904,6 @@ export default function AdminResultsPage() {
                 <option value="">All Status</option>
                 <option value="PASS">Pass</option>
                 <option value="FAIL">Fail</option>
-                <option value="COMPARTMENT">Compartment</option>
               </select>
             </div>
             <Button variant="primary" size="sm" onClick={() => { setCreateForm(blankForm()); setCreateError(""); setCreateSuccess(""); setStructureDetail(null); setDetailError(""); setShowCreateForm(true); }}><Plus size={14} /> Add Result</Button>
@@ -933,7 +1021,7 @@ export default function AdminResultsPage() {
         <form onSubmit={handleCreateSubmit}>
           {/* Add Result form — student info, result info, dynamic subjects, summary */}
           <h3 className={styles.modalTitle}>Add New Result</h3>
-          <p className={styles.modalDesc}>Choose the programme, academic session and semester first — the subjects (and their credits, type and maximum marks) are loaded from Academic Structure. Enter only the marks and grades obtained. Subject totals, maximum marks and percentage are calculated automatically.</p>
+          <p className={styles.modalDesc}>Choose the programme, academic session and semester first — the subjects (and their credits, type and maximum marks) are loaded from Academic Structure. Enter only the marks obtained (and tick Absent where applicable). Subject total, grade, grade point, percentage, SGPA, CGPA and equivalent percentage are all calculated by the server.</p>
           <ModalScrollable>
             {/* ── Student Information ── */}
             <section className={styles.formSection}>
@@ -942,6 +1030,9 @@ export default function AdminResultsPage() {
                 <div className={styles.formField}><label>Student Name *</label><input type="text" placeholder="e.g. Aarav Sharma" value={createForm.studentName} onChange={(e) => updateFormFields(setCreateForm, "studentName", e.target.value)} /></div>
                 <div className={styles.formField}><label>Roll Number *</label><input type="text" placeholder="e.g. MSU2024001" value={createForm.rollNumber} onChange={(e) => updateFormFields(setCreateForm, "rollNumber", e.target.value)} /></div>
                 <div className={styles.formField}><label>Enrollment Number *</label><input type="text" placeholder="e.g. EN2024CS1001" value={createForm.enrollmentNumber} onChange={(e) => updateFormFields(setCreateForm, "enrollmentNumber", e.target.value)} /></div>
+                <div className={styles.formField}><label>Father&apos;s Name</label><input type="text" placeholder="e.g. Rajesh Sharma" value={createForm.fatherName} onChange={(e) => updateFormFields(setCreateForm, "fatherName", e.target.value)} /></div>
+                <div className={styles.formField}><label>Mother&apos;s Name</label><input type="text" placeholder="e.g. Sunita Sharma" value={createForm.motherName} onChange={(e) => updateFormFields(setCreateForm, "motherName", e.target.value)} /></div>
+                <div className={styles.formField}><label>Gender</label><div className={styles.radioRow} role="radiogroup" aria-label="Gender">{GENDER_OPTIONS.map((option) => (<label key={option} className={styles.radioOption}><input type="radio" name="create-gender" value={option} checked={createForm.gender === option} onChange={() => updateFormFields(setCreateForm, "gender", option)} /><span>{option}</span></label>))}</div></div>
                 <div className={styles.formField}><label>College Name *</label><input type="text" placeholder="e.g. University College" value={createForm.collegeName} onChange={(e) => updateFormFields(setCreateForm, "collegeName", e.target.value)} /></div>
               </div>
 
@@ -1008,12 +1099,16 @@ export default function AdminResultsPage() {
                         <div className={`${styles.formField} ${styles.autoField}`}><label>Credits</label><input type="text" value={sub.credits} readOnly tabIndex={-1} /></div>
                         <div className={`${styles.formField} ${styles.autoField}`}><label>Type</label><input type="text" value={sub.subjectType} readOnly tabIndex={-1} /></div>
                         <div className={`${styles.formField} ${styles.autoField}`}><label>Maximum Marks</label><input type="text" value={sub.maxMarks} readOnly tabIndex={-1} /></div>
-                        <div className={styles.formField}><label>Internal Marks *</label><input type="number" min={0} placeholder="28" value={sub.internalMarks} onChange={(e) => updateSubject(i, "internalMarks", e.target.value)} /></div>
-                        <div className={styles.formField}><label>External Marks *</label><input type="number" min={0} placeholder="58" value={sub.externalMarks} onChange={(e) => updateSubject(i, "externalMarks", e.target.value)} /></div>
+                        <div className={styles.formField}><label>Internal Marks * (max {internalLimitFor(sub)})</label><input type="number" min={0} max={internalLimitFor(sub)} step={1} inputMode="numeric" placeholder="28" disabled={sub.isAbsent} value={sub.internalMarks} onChange={(e) => updateSubject(i, "internalMarks", e.target.value)} onWheel={(e) => e.currentTarget.blur()} /></div>
+                        <div className={styles.formField}><label>External Marks * (max {externalLimitFor(sub)})</label><input type="number" min={0} max={externalLimitFor(sub)} step={1} inputMode="numeric" placeholder="58" disabled={sub.isAbsent} value={sub.externalMarks} onChange={(e) => updateSubject(i, "externalMarks", e.target.value)} onWheel={(e) => e.currentTarget.blur()} /></div>
                         <div className={`${styles.formField} ${styles.autoField}`}><label>Total Marks (auto)</label><input type="number" value={subjectTotal(sub)} readOnly tabIndex={-1} /></div>
-                        <div className={styles.formField}><label>Grade *</label><input type="text" placeholder="e.g. A" value={sub.grade} onChange={(e) => updateSubject(i, "grade", e.target.value)} /></div>
-                        <div className={styles.formField}><label>Grade Point *</label><input type="number" min={0} step="0.1" placeholder="9" value={sub.gradePoint} onChange={(e) => updateSubject(i, "gradePoint", e.target.value)} /></div>
+                        <div className={`${styles.formField} ${styles.autoField}`}><label>Grade (auto)</label><input type="text" value={gradeForMarks(subjectTotal(sub), sub.isAbsent).grade} readOnly tabIndex={-1} /></div>
+                        <div className={`${styles.formField} ${styles.autoField}`}><label>Grade Point (auto)</label><input type="number" value={gradeForMarks(subjectTotal(sub), sub.isAbsent).gradePoint} readOnly tabIndex={-1} /></div>
                       </div>
+                      <label className={styles.checkRow}>
+                        <input type="checkbox" checked={sub.isAbsent} onChange={(e) => toggleAbsent(i, e.target.checked)} />
+                        <span>Absent (AB) — the candidate was absent for this subject (grade AB, 0 points)</span>
+                      </label>
                       <label className={styles.checkRow}>
                         <input type="checkbox" checked={sub.isBacklog} onChange={() => toggleBacklog(i)} />
                         <span>Compartment / Backlog — this subject is a compartment subject for this student</span>
@@ -1034,12 +1129,13 @@ export default function AdminResultsPage() {
                 {/* SGPA and CGPA are calculated by the server and are display-only. */}
                 <div className={styles.summaryItem}><span className={styles.summaryLabel}>SGPA (auto)</span><span className={styles.summaryValue}>{createSgpa === null ? "—" : createSgpa.toFixed(2)}</span></div>
                 <div className={styles.summaryItem}><span className={styles.summaryLabel}>CGPA (auto)</span><span className={styles.summaryValue}>{createForm.cgpa.trim() || "Calculated on save"}</span></div>
+                <div className={styles.summaryItem}><span className={styles.summaryLabel}>Equivalent % (auto)</span><span className={styles.summaryValue}>{createForm.equivalentPercentage.trim() || "Calculated on save"}</span></div>
               </div>
               <div className={styles.formGrid}>
                 <div className={styles.formField}>
-                  <label>Result Status *</label>
-                  <select value={createForm.resultStatus} onChange={(e) => updateFormFields(setCreateForm, "resultStatus", e.target.value)}><option value="">Select</option><option value="PASS">PASS</option><option value="FAIL">FAIL</option><option value="COMPARTMENT">COMPARTMENT</option></select>
-                  {hasBacklogSubjects && createForm.resultStatus === "COMPARTMENT" && (<span className={styles.fieldHint}>Set automatically because a subject is marked as compartment.</span>)}
+                  <label>Result Status (auto)</label>
+                  <input type="text" className={styles.autoInput} value={createSemesterStatus} readOnly tabIndex={-1} />
+                  <span className={styles.fieldHint}>Calculated from the subject results — Pass unless a subject is Fail or Absent.</span>
                 </div>
               </div>
               {hasBacklogSubjects && (<p className={styles.summaryNote}><strong>Compartment subjects:</strong> {backlogSubjects.join(", ")} — each one is saved with its own compartment flag.</p>)}
@@ -1062,13 +1158,17 @@ export default function AdminResultsPage() {
             <div className={styles.formFields}>
               <div className={styles.formField}><label>Student Name *</label><input type="text" value={editForm.studentName} onChange={(e) => updateFormFields(setEditForm, "studentName", e.target.value)} /></div>
               <div className={styles.formField}><label>Roll Number *</label><input type="text" value={editForm.rollNumber} onChange={(e) => updateFormFields(setEditForm, "rollNumber", e.target.value)} /></div>
+              <div className={styles.formField}><label>Father&apos;s Name</label><input type="text" value={editForm.fatherName} onChange={(e) => updateFormFields(setEditForm, "fatherName", e.target.value)} /></div>
+              <div className={styles.formField}><label>Mother&apos;s Name</label><input type="text" value={editForm.motherName} onChange={(e) => updateFormFields(setEditForm, "motherName", e.target.value)} /></div>
+              <div className={styles.formField}><label>Gender</label><div className={styles.radioRow} role="radiogroup" aria-label="Gender">{GENDER_OPTIONS.map((option) => (<label key={option} className={styles.radioOption}><input type="radio" name="edit-gender" value={option} checked={editForm.gender === option} onChange={() => updateFormFields(setEditForm, "gender", option)} /><span>{option}</span></label>))}</div></div>
               <div className={`${styles.formField} ${styles.autoField}`}><label>SGPA (auto)</label><input type="text" value={editForm.sgpa || "—"} readOnly tabIndex={-1} /></div>
               <div className={`${styles.formField} ${styles.autoField}`}><label>CGPA (auto)</label><input type="text" value={editForm.cgpa || "—"} readOnly tabIndex={-1} /></div>
-              <div className={styles.formField}><label>Result Status *</label><select value={editForm.resultStatus} onChange={(e) => updateFormFields(setEditForm, "resultStatus", e.target.value)}><option value="">Select</option><option value="PASS">PASS</option><option value="FAIL">FAIL</option><option value="COMPARTMENT">COMPARTMENT</option></select></div>
+              <div className={`${styles.formField} ${styles.autoField}`}><label>Equivalent % (auto)</label><input type="text" value={editForm.equivalentPercentage || "—"} readOnly tabIndex={-1} /></div>
+              <div className={styles.formField}><label>Result Status (auto)</label><input type="text" className={styles.autoInput} value={editFormSemesterStatus} readOnly tabIndex={-1} /></div>
               <div className={styles.formField}><label>Declared Date *</label><input type="text" value={editForm.declaredDate} onChange={(e) => updateFormFields(setEditForm, "declaredDate", e.target.value)} /></div>
-              <div className={styles.formField}><label>Total Marks</label><input type="number" min="0" value={editForm.totalMarks} onChange={(e) => updateFormFields(setEditForm, "totalMarks", e.target.value)} /></div>
-              <div className={styles.formField}><label>Max Total Marks</label><input type="number" min="1" value={editForm.maxTotalMarks} onChange={(e) => updateFormFields(setEditForm, "maxTotalMarks", e.target.value)} /></div>
-              <div className={styles.formField}><label>Percentage</label><input type="number" min="0" max="100" step="0.1" value={editForm.percentage} onChange={(e) => updateFormFields(setEditForm, "percentage", e.target.value)} /></div>
+              <div className={`${styles.formField} ${styles.autoField}`}><label>Total Marks (auto)</label><input type="number" value={editForm.totalMarks || "0"} readOnly tabIndex={-1} /></div>
+              <div className={`${styles.formField} ${styles.autoField}`}><label>Max Total Marks (auto)</label><input type="number" value={editForm.maxTotalMarks || "0"} readOnly tabIndex={-1} /></div>
+              <div className={`${styles.formField} ${styles.autoField}`}><label>Percentage (auto)</label><input type="number" value={editForm.percentage || "0"} readOnly tabIndex={-1} /></div>
             </div>
           </ModalScrollable>
           {editError && <p className={styles.formError}>{editError}</p>}

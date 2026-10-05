@@ -60,6 +60,8 @@ export interface IResultSubject {
    */
   subjectType: SubjectType | null;
   isBacklog: boolean;
+  /** True when the candidate was absent for this subject (stored as grade AB, 0 points). */
+  isAbsent: boolean;
 }
 
 /**
@@ -83,6 +85,14 @@ export interface IResultStudent {
   semester: string;
   academicSession: string;
   collegeName: string;
+  /**
+   * Optional identity fields, snapshotted with the Result (the printed
+   * Statement of Marks reads them from here). Empty string when not recorded —
+   * the document renders an em dash. They are never derived, only admin-entered.
+   */
+  fatherName: string;
+  motherName: string;
+  gender: string;
 }
 
 /** Full result document */
@@ -103,7 +113,15 @@ export interface IResult extends Document {
    * stale when an earlier semester changes.
    */
   cgpa: string | null;
-  resultStatus: "PASS" | "FAIL" | "COMPARTMENT";
+  /** Equivalent percentage (CGPA x 9.5), 2 dp; null until a CGPA exists. */
+  equivalentPercentage: number | null;
+  /**
+   * Semester result status, derived server-side from the subjects (see
+   * lib/result-grading.ts): FAIL when a subject is Fail/Absent, else PASS.
+   * There is deliberately no "Compartment" SEMESTER status — a compartment
+   * subject is reported on its own row and never fails the semester.
+   */
+  resultStatus: "PASS" | "FAIL";
   remarks: string;
   declaredDate: string;
   createdAt: Date;
@@ -121,6 +139,7 @@ type ResultLike = Pick<
   | "percentage"
   | "sgpa"
   | "cgpa"
+  | "equivalentPercentage"
   | "resultStatus"
   | "remarks"
   | "declaredDate"
@@ -149,9 +168,10 @@ const validGradePoint = {
 };
 
 const validCredits = {
-  validator: (v: number) =>
-    typeof v === "number" && Number.isInteger(v) && v > 0,
-  message: "Credits must be a positive integer.",
+  // Non-negative, matching ProgrammeStructure.parseCredits: 0 = qualifying/
+  // non-credit course, decimals allowed so curriculum credits always fit.
+  validator: (v: number) => typeof v === "number" && Number.isFinite(v) && v >= 0,
+  message: "Credits must be a non-negative number.",
 };
 
 // Aligned with ProgrammeStructure's subject-code rule: curriculum codes the
@@ -238,6 +258,12 @@ const resultSubjectSchema = new Schema<IResultSubject>(
       required: [true, "isBacklog is required"],
       default: false,
     },
+    // True when the candidate was absent for this subject; grade is AB and
+    // grade point 0. Default false keeps existing Results valid.
+    isAbsent: {
+      type: Boolean,
+      default: false,
+    },
   },
   { _id: false }
 );
@@ -307,6 +333,23 @@ const resultStudentSchema = new Schema<IResultStudent>(
       required: [true, "College name is required"],
       trim: true,
     },
+    // Optional identity fields. Stored on the Result snapshot so the statement
+    // always prints what was recorded, independent of any curriculum edit.
+    fatherName: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    motherName: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    gender: {
+      type: String,
+      default: "",
+      trim: true,
+    },
   },
   { _id: false }
 );
@@ -366,12 +409,17 @@ const resultSchema = new Schema<IResult>(
       default: null,
       trim: true,
     },
+    // Equivalent percentage (CGPA x 9.5), 2 dp; null until a CGPA exists.
+    equivalentPercentage: {
+      type: Number,
+      default: null,
+    },
     resultStatus: {
       type: String,
       required: [true, "Result status is required"],
       enum: {
-        values: ["PASS", "FAIL", "COMPARTMENT"],
-        message: "Result status must be one of: PASS, FAIL, COMPARTMENT.",
+        values: ["PASS", "FAIL"],
+        message: "Result status must be one of: PASS, FAIL.",
       },
     },
     remarks: {
@@ -414,6 +462,9 @@ export function toSafeResult(result: ResultLike) {
       semester: result.student.semester,
       academicSession: result.student.academicSession,
       collegeName: result.student.collegeName,
+      fatherName: result.student.fatherName ?? "",
+      motherName: result.student.motherName ?? "",
+      gender: result.student.gender ?? "",
     },
     curriculum: result.curriculum
       ? {
@@ -433,12 +484,14 @@ export function toSafeResult(result: ResultLike) {
       credits: subject.credits,
       subjectType: subject.subjectType ?? null,
       isBacklog: subject.isBacklog,
+      isAbsent: subject.isAbsent === true,
     })),
     totalMarks: result.totalMarks,
     maxTotalMarks: result.maxTotalMarks,
     percentage: result.percentage,
     sgpa: result.sgpa ?? null,
     cgpa: result.cgpa ?? null,
+    equivalentPercentage: result.equivalentPercentage ?? null,
     resultStatus: result.resultStatus,
     remarks: result.remarks,
     declaredDate: result.declaredDate,

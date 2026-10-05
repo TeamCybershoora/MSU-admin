@@ -47,6 +47,7 @@
 import OrnamentalFrame from "./ornamental-frame";
 import ResultMarksTable from "./result-marks-table";
 import type { GradeScaleRow, PreviousSemester, StatementOfMarks } from "./types";
+import { MSU_GRADE_TABLE } from "@/lib/result-grading";
 import styles from "./result-document.module.css";
 
 const UNIVERSITY_NAME = "MAA SHAKUMBHARI UNIVERSITY";
@@ -68,14 +69,12 @@ const UNIVERSITY_LOGO_SRC = "/favicon.ico";
  * confirmed — the component never assumes these are the official bands.
  */
 const DEFAULT_GRADE_SCALE: GradeScaleRow[] = [
-  { grade: "O", gradePoint: 10, range: "90 – 100", description: "Outstanding" },
-  { grade: "A+", gradePoint: 9, range: "80 – 89", description: "Excellent" },
-  { grade: "A", gradePoint: 8, range: "70 – 79", description: "Very good" },
-  { grade: "B+", gradePoint: 7, range: "60 – 69", description: "Good" },
-  { grade: "B", gradePoint: 6, range: "55 – 59", description: "Above average" },
-  { grade: "C", gradePoint: 5, range: "50 – 54", description: "Average" },
-  { grade: "P", gradePoint: 4, range: "40 – 49", description: "Pass" },
-  { grade: "F", gradePoint: 0, range: "Below 40", description: "Fail" },
+  ...MSU_GRADE_TABLE.map((band) => ({
+    grade: band.grade,
+    gradePoint: band.gradePoint,
+    range: `${band.minMarks} – ${band.maxMarks}`,
+  })),
+  { grade: "AB", gradePoint: 0, range: "Absent" },
 ];
 
 const ROMAN_VALUES: Record<string, number> = { I: 1, V: 5, X: 10, L: 50, C: 100 };
@@ -202,7 +201,7 @@ export default function ResultDocument({
   onViewDegreeResult,
   className = "",
 }: ResultDocumentProps) {
-  const { student, subjects, totalMarks, maxTotalMarks, percentage, cgpa, resultStatus } = data;
+  const { student, subjects, totalMarks, maxTotalMarks, cgpa, resultStatus } = data;
 
   /* ── Derived semester summary ─────────────────────────────────── */
 
@@ -211,7 +210,8 @@ export default function ResultDocument({
     (sum, subject) => sum + (Number(subject.gradePoint) || 0) * (Number(subject.credits) || 0),
     0
   );
-  const sgpa = totalCredits > 0 ? weightedPoints / totalCredits : null;
+  const storedSgpa = typeof data.sgpa === "number" ? data.sgpa : null;
+  const sgpa = storedSgpa ?? (totalCredits > 0 ? weightedPoints / totalCredits : null);
   const sgpaLabel = sgpa === null ? "—" : sgpa.toFixed(2);
   const gradeValue = sgpa === null ? "—" : gradeForPoint(sgpa, gradeScale);
 
@@ -244,7 +244,14 @@ export default function ResultDocument({
   /* Headline figures — rendered as one formal table, never as dashboard cards. */
   const academicFigures: { label: string; value: string }[] = [
     { label: "Total Marks", value: `${totalMarks} / ${maxTotalMarks}` },
-    { label: "Percentage", value: `${percentage}%` },
+    // ONE percentage only. It shows the existing calculated equivalent
+    // percentage (CGPA × 9.5, already computed and stored server-side); the raw
+    // marks percentage is deliberately not printed as a second field.
+    {
+      label: "Percentage",
+      value:
+        data.equivalentPercentage != null ? `${data.equivalentPercentage}%` : "—",
+    },
     { label: "Credits Earned", value: String(totalCredits) },
     { label: "SGPA", value: sgpaLabel },
     { label: "Cumulative CGPA", value: cgpa && cgpa.trim() ? cgpa : "—" },
@@ -419,9 +426,8 @@ export default function ResultDocument({
                         Value
                       </th>
                       <th scope="col" className={styles.numCell}>
-                        Marks Range (%)
+                        Marks Range
                       </th>
-                      <th scope="col">Description</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -430,7 +436,6 @@ export default function ResultDocument({
                         <td className={styles.gradeCell}>{row.grade}</td>
                         <td className={styles.numCell}>{row.gradePoint}</td>
                         <td className={styles.numCell}>{row.range}</td>
-                        <td>{row.description ?? "—"}</td>
                       </tr>
                     ))}
                   </tbody>

@@ -48,6 +48,9 @@ import {
   Mail,
   Layers,
   MessageSquare,
+  Newspaper,
+  Camera,
+  Crown,
 } from "lucide-react";
 import { getStoredToken, clearAuthSession } from "@/lib/auth";
 import styles from "./layout.module.css";
@@ -73,6 +76,9 @@ const NAV_ITEMS = [
   },
   { href: "/admin/results", label: "Result Management", icon: FileText },
   { href: "/admin/notices", label: "Notices Management", icon: Megaphone },
+  { href: "/admin/news", label: "News Management", icon: Newspaper },
+  { href: "/admin/spotlight", label: "Spotlight Management", icon: Camera },
+  { href: "/admin/leadership", label: "Leadership Management", icon: Crown },
   { href: "/admin/syllabus", label: "Syllabus & Documents", icon: BookOpen },
   { href: "/admin/colleges", label: "College Management", icon: Building2 },
 ];

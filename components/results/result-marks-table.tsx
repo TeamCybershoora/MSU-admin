@@ -1,17 +1,33 @@
 /**
  * ResultMarksTable — subject-wise marks table of the Statement of Marks.
  *
- * Renders the internals / externals / total / grade / credits for every
- * subject of the semester, plus a totals row. Compartment (backlog) subjects
- * are flagged in the Status column *and* marked with a trailing asterisk on
- * the subject name, so the flag survives a black-and-white photocopy.
+ * Renders the internals / externals / total / grade / credits / status for
+ * every subject of the semester, plus a totals row. The status column shows the
+ * subject's real status (Pass / Fail / Absent / Compartment) derived from the
+ * stored fields; a compartment subject is also marked with a trailing asterisk
+ * on the subject name, so the flag survives a black-and-white photocopy.
  *
  * Intentionally print-first: fixed column widths, no hover states, and
  * long subject names wrap instead of being clipped.
  */
 
+import { subjectStatus, type SubjectStatus } from "@/lib/result-grading";
 import type { StatementSubject } from "./types";
 import styles from "./result-marks-table.module.css";
+
+/** Document tone for a subject status, from the existing stored derivation. */
+function statusClass(status: SubjectStatus): string {
+  switch (status) {
+    case "Pass":
+      return styles.statusPass;
+    case "Fail":
+      return styles.statusFail;
+    case "Absent":
+      return styles.statusAbsent;
+    default:
+      return styles.compartment;
+  }
+}
 
 interface ResultMarksTableProps {
   subjects: StatementSubject[];
@@ -59,14 +75,20 @@ export default function ResultMarksTable({
                 {subject.subjectName}
                 {subject.isBacklog && <span className={styles.backlogMark} aria-hidden="true">*</span>}
               </td>
-              <td className={styles.numCell}>{subject.internalMarks}</td>
-              <td className={styles.numCell}>{subject.externalMarks}</td>
+              {/* An absent candidate has no component marks; the statement must
+                  print a dash rather than a misleading 0. */}
+              <td className={styles.numCell}>{subject.isAbsent ? "—" : subject.internalMarks}</td>
+              <td className={styles.numCell}>{subject.isAbsent ? "—" : subject.externalMarks}</td>
               <td className={styles.numCellStrong}>{subject.totalMarks}</td>
               <td className={styles.numCell}>{subject.maxMarks}</td>
               <td className={styles.numCellStrong}>{subject.grade || "—"}</td>
               <td className={styles.numCell}>{subject.credits}</td>
+              {/* The stored/derived status (Pass / Fail / Absent / Compartment),
+                  never a blanket em dash. */}
               <td className={styles.colStatus}>
-                {subject.isBacklog ? <span className={styles.compartment}>Compartment</span> : "—"}
+                <span className={statusClass(subjectStatus(subject))}>
+                  {subjectStatus(subject)}
+                </span>
               </td>
             </tr>
           ))}

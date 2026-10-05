@@ -10,6 +10,19 @@
  * - app/admin/results/page.tsx (View Result modal)
  */
 
+/**
+ * The only selectable gender values. Single source of truth shared by the Add /
+ * Edit forms (radio group) and the tests — gender is never free text, and the
+ * list is deliberately closed so no multiple representations can appear.
+ */
+export const GENDER_OPTIONS = ["Male", "Female", "Other"] as const;
+export type Gender = (typeof GENDER_OPTIONS)[number];
+
+/** True when a value is one of the allowed gender options ("" allowed = not set). */
+export function isGender(value: unknown): value is Gender | "" {
+  return value === "" || GENDER_OPTIONS.includes(value as Gender);
+}
+
 /** Student identity block printed on the statement. */
 export interface StatementStudent {
   name: string;
@@ -42,7 +55,15 @@ export interface StatementSubject {
   grade: string;
   gradePoint: number;
   credits: number;
+  /**
+   * Curriculum subject type (THEORY / PRACTICAL / THEORY_PRACTICAL) snapshotted
+   * on the Result. Drives the per-subject passing threshold (Practical 40%,
+   * Theory 36%). Null/absent on legacy results, which are treated as Theory.
+   */
+  subjectType?: string | null;
   isBacklog: boolean;
+  /** True when the candidate was absent: the statement prints an em dash for marks. */
+  isAbsent?: boolean;
 }
 
 /**
@@ -64,7 +85,6 @@ export interface GradeScaleRow {
   grade: string;
   gradePoint: number | string;
   range: string;
-  description?: string;
 }
 
 /** Everything the Statement of Marks needs to render. */
@@ -75,6 +95,10 @@ export interface StatementOfMarks {
   maxTotalMarks: number;
   percentage: number;
   cgpa: string;
+  /** Credit-weighted SGPA (2 dp) when the Result stored one. */
+  sgpa?: number | null;
+  /** Equivalent percentage (CGPA × 9.5), 2 dp; null/absent when unavailable. */
+  equivalentPercentage?: number | null;
   resultStatus: "PASS" | "FAIL" | "COMPARTMENT" | string;
   remarks?: string;
   declaredDate: string;

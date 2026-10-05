@@ -164,6 +164,23 @@
   white-space: nowrap;
 }
 
+/* ── Subject status ───────────────────────────────────────────────── */
+
+.statusPass {
+  color: #2c5d3f;
+  font-weight: 700;
+}
+
+.statusFail {
+  color: #8f2222;
+  font-weight: 700;
+}
+
+.statusAbsent {
+  color: #8a5416;
+  font-weight: 700;
+}
+
 .footnote {
   margin: 5px 0 0;
   font-size: 8.5px;
