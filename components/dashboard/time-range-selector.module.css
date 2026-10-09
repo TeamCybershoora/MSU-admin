@@ -1,0 +1,84 @@
+/* ── TimeRangeSelector ──────────────────────────────────────────────── */
+
+.wrap {
+  position: relative;
+  display: inline-grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  padding: 3px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border-subtle);
+}
+
+.indicator {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  left: 3px;
+  width: calc((100% - 6px) / var(--count, 4));
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  box-shadow: 0 1px 3px rgba(0, 21, 36, 0.14);
+  transform: translateX(calc(var(--active, 0) * 100%));
+  transition: transform var(--dur-medium) var(--ease-inout);
+  will-change: transform;
+}
+
+.option {
+  position: relative;
+  z-index: 1;
+  padding: 0.32rem 0.7rem;
+  border: none;
+  background: none;
+  border-radius: var(--radius-pill);
+  font-family: inherit;
+  font-size: 0.74rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color var(--dur-short) var(--ease-out);
+}
+
+.option:hover {
+  color: var(--text-body);
+}
+
+.active {
+  color: var(--text-strong);
+  font-weight: 600;
+}
+
+:global(html.dark) .indicator {
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow: none;
+}
+
+/* ── Responsive ─────────────────────────────────────────────────────── */
+
+/* Tighten the options so all four still fit a small phone without the control
+   overflowing its card or the page. */
+@media (max-width: 480px) {
+  .wrap {
+    max-width: 100%;
+  }
+
+  .option {
+    padding: 0.3rem 0.5rem;
+    font-size: 0.68rem;
+  }
+}
+
+@media (max-width: 360px) {
+  .option {
+    padding: 0.28rem 0.4rem;
+    font-size: 0.64rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .indicator {
+    transition: none;
+  }
+}

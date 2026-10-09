@@ -1,0 +1,354 @@
+/* ── SearchableSelect ───────────────────────────────────────────────
+   Theme tokens are inherited from the admin theme (see app/globals.css) so the
+   control matches the existing forms in both light and dark mode. The option
+   list is portaled to <body> and positioned with fixed coordinates, so these
+   rules must not rely on the control's ancestors. */
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  position: relative;
+}
+
+.label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--foreground) 75%, var(--muted));
+}
+
+.required {
+  color: #dc2626;
+}
+
+.control {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1.5px solid rgba(21, 97, 109, 0.12);
+  border-radius: 10px;
+  padding: 0 0.6rem 0 0.7rem;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.control:focus-within,
+.controlOpen {
+  border-color: var(--accent);
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(224, 122, 82, 0.1);
+}
+
+.controlDisabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.searchIcon {
+  color: color-mix(in srgb, var(--foreground) 40%, var(--muted));
+  flex-shrink: 0;
+}
+
+.input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  outline: none;
+  padding: 0.6rem 0;
+  font-size: 0.9rem;
+  font-family: inherit;
+  color: var(--foreground);
+}
+
+.input::placeholder {
+  color: color-mix(in srgb, var(--foreground) 42%, var(--muted));
+}
+
+.input:disabled {
+  cursor: not-allowed;
+}
+
+.iconBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: color-mix(in srgb, var(--foreground) 50%, var(--muted));
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.iconBtn:hover:not(:disabled) {
+  background: rgba(21, 97, 109, 0.08);
+  color: var(--foreground);
+}
+
+.iconBtn:disabled {
+  cursor: not-allowed;
+}
+
+.chevron {
+  transition: transform var(--dur-short) var(--ease-standard);
+}
+
+.chevronOpen {
+  transform: rotate(180deg);
+}
+
+/* ── Compact trigger (filter bars) ─────────────────────────────────
+   A host passes its own filter-control class via `triggerClassName`; this block
+   only supplies the inline flex layout and the width-locking text so the control
+   keeps the page's existing dimensions while reusing the animated option list. */
+
+.compactField {
+  display: inline-flex;
+  position: relative;
+}
+
+.compactTrigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-family: inherit;
+  text-align: left;
+  appearance: none;
+}
+
+.compactTrigger:disabled {
+  cursor: not-allowed;
+}
+
+.compactText {
+  display: inline-grid;
+  min-width: 0;
+}
+
+.compactText > * {
+  grid-area: 1 / 1;
+  white-space: nowrap;
+}
+
+.compactSizer {
+  visibility: hidden;
+}
+
+.compactValue {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.compactTrigger .chevron {
+  flex-shrink: 0;
+  opacity: 0.6;
+}
+
+.hint {
+  font-size: 0.75rem;
+  color: color-mix(in srgb, var(--foreground) 45%, var(--muted));
+}
+
+/* ── Portaled option list ─────────────────────────────────────── */
+
+.menu {
+  position: fixed;
+  z-index: 1100;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: var(--card);
+  border: 1px solid rgba(21, 97, 109, 0.15);
+  border-radius: 12px;
+  box-shadow:
+    0 16px 40px -12px rgba(0, 0, 0, 0.25),
+    0 4px 12px rgba(0, 0, 0, 0.08);
+  padding: 0.3rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  /* Enter/exit motion. `--menu-offset` carries the up/down placement (0px, or
+     -100% when the list opens upward) so the animation composes with the fixed
+     positioning instead of fighting the inline transform. */
+  transform: translateY(var(--menu-offset, 0px));
+  animation: menuIn var(--dur-short) var(--ease-standard);
+  transition:
+    opacity var(--dur-short) var(--ease-standard),
+    transform var(--dur-short) var(--ease-standard);
+}
+
+/* Applied for the exit animation; the component unmounts once it completes. */
+.menuClosing {
+  opacity: 0;
+  transform: translateY(calc(var(--menu-offset, 0px) - 8px));
+  pointer-events: none;
+}
+
+@keyframes menuIn {
+  from {
+    opacity: 0;
+    transform: translateY(calc(var(--menu-offset, 0px) - 8px));
+  }
+  to {
+    opacity: 1;
+    transform: translateY(var(--menu-offset, 0px));
+  }
+}
+
+.option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  padding: 0.5rem 0.6rem;
+  cursor: pointer;
+  color: var(--foreground);
+  font-family: inherit;
+  transition:
+    background var(--dur-fast) var(--ease-standard),
+    color var(--dur-fast) var(--ease-standard);
+}
+
+.optionActive {
+  background: rgba(21, 97, 109, 0.08);
+}
+
+.optionSelected {
+  color: var(--accent);
+}
+
+.optionSelected svg {
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.optionText {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.optionLabel {
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.optionDesc {
+  font-size: 0.76rem;
+  color: color-mix(in srgb, var(--foreground) 55%, var(--muted));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Footer create action (the only non-option item in the list) ── */
+
+.menuFooter {
+  margin-top: 0.2rem;
+  padding-top: 0.2rem;
+  border-top: 1px solid rgba(21, 97, 109, 0.12);
+}
+
+.footerBtn {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  padding: 0.55rem 0.6rem;
+  cursor: pointer;
+  color: var(--accent);
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.footerBtn:hover,
+.footerBtnActive {
+  background: rgba(224, 122, 82, 0.12);
+}
+
+.menuState {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.8rem 0.6rem;
+  font-size: 0.83rem;
+  color: color-mix(in srgb, var(--foreground) 55%, var(--muted));
+  text-align: center;
+}
+
+.menuError {
+  color: #dc2626;
+}
+
+.retryBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  border: 1px solid rgba(21, 97, 109, 0.25);
+  background: transparent;
+  color: var(--foreground);
+  border-radius: 7px;
+  padding: 0.25rem 0.55rem;
+  font-size: 0.78rem;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.retryBtn:hover {
+  background: rgba(21, 97, 109, 0.08);
+}
+
+.spin {
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ── Dark mode ─────────────────────────────────────── */
+
+:global(html.dark) .control {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+:global(html.dark) .control:focus-within,
+:global(html.dark) .controlOpen {
+  background: rgba(255, 255, 255, 0.07);
+}
+
+:global(html.dark) .menu {
+  background: #2c2b2d;
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+:global(html.dark) .optionActive {
+  background: rgba(255, 255, 255, 0.07);
+}
+
+:global(html.dark) .menuFooter {
+  border-top-color: rgba(255, 255, 255, 0.1);
+}
+
+:global(html.dark) .footerBtn:hover,
+:global(html.dark) .footerBtnActive {
+  background: rgba(224, 122, 82, 0.2);
+}

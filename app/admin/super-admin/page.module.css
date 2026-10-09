@@ -1,0 +1,386 @@
+/* ── Super Admin dashboard ──────────────────────────────────────────
+ * Shell (screen switcher + role gate + content-panel transition) and the
+ * shared layout used by Screen A (Overview) and Screen B (Geography / Shares).
+ * Built on the dashboard design tokens in app/globals.css so it matches the
+ * existing charts, cards and metrics.
+ * ─────────────────────────────────────────────────────────────────── */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+/* ── Content panel (only this transitions between screens) ────────── */
+
+.contentPanel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  /* Scale from the top so the panel does not appear to jump. */
+  transform-origin: top center;
+  transition:
+    opacity 260ms var(--ease-out),
+    transform 260ms var(--ease-out);
+}
+
+/* Exit state while the next screen mounts (brief: opacity 1→0, scale 1→.98) */
+.contentPanelOut {
+  opacity: 0;
+  transform: scale(0.98);
+  pointer-events: none;
+}
+
+/* ── Screen switcher ──────────────────────────────────────────────── */
+
+.screenSwitch {
+  display: inline-flex;
+  align-self: flex-start;
+  gap: var(--space-1);
+  padding: 4px;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-pill);
+}
+
+.screenTab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition:
+    background var(--dur-short) var(--ease-out),
+    color var(--dur-short) var(--ease-out);
+}
+
+.screenTab:hover {
+  color: var(--text-strong);
+}
+
+.screenTabIcon {
+  width: 16px;
+  height: 16px;
+}
+
+.screenTabActive {
+  background: var(--primary);
+  color: #fff;
+  box-shadow: var(--shadow-ambient);
+}
+
+.screenTabActive:hover {
+  color: #fff;
+}
+
+/* ── Role gate ────────────────────────────────────────────────────── */
+
+.restricted {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--space-3);
+  padding: 3rem 1.5rem;
+}
+
+.restrictedIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  border-radius: var(--radius-control);
+  background: var(--primary-weak);
+  color: var(--primary);
+}
+
+.restrictedIcon svg {
+  width: 24px;
+  height: 24px;
+}
+
+.restrictedTitle {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--text-strong);
+}
+
+.restrictedText {
+  margin: 0;
+  max-width: 38rem;
+  font-size: 0.88rem;
+  line-height: 1.55;
+  color: var(--text-muted);
+}
+
+/* ── Screen intro header ──────────────────────────────────────────── */
+
+.intro {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.introText {
+  min-width: 0;
+}
+
+.introTitle {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--text-strong);
+}
+
+.introSubtitle {
+  margin: 0.2rem 0 0;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.refreshIcon {
+  width: 14px;
+  height: 14px;
+}
+
+/* ── Rows ─────────────────────────────────────────────────────────── */
+
+.row1 {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+  gap: var(--space-5);
+  align-items: stretch;
+}
+
+.row2 {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+  gap: var(--space-5);
+  align-items: stretch;
+}
+
+.metricGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+
+/* ── Geography card body (Screen B) ───────────────────────────────── */
+
+.geographyBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.subSection {
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.subTitle {
+  margin: 0 0 var(--space-2);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.notice {
+  margin: 0;
+  font-size: 0.76rem;
+  line-height: 1.5;
+  color: var(--text-faint);
+}
+
+/* ── Quick actions (Screen A) ─────────────────────────────────────── */
+
+.actionsGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-3);
+}
+
+.actionCard {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 0.7rem 0.9rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--text-body);
+  text-decoration: none;
+  transition:
+    transform var(--dur-short) var(--ease-out),
+    border-color var(--dur-short) var(--ease-out),
+    box-shadow var(--dur-short) var(--ease-out);
+}
+
+.actionCard:hover {
+  transform: translateY(-1px);
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-ambient);
+}
+
+.actionIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border-radius: var(--radius-control);
+  background: var(--primary-weak);
+  color: var(--primary);
+}
+
+.actionIcon svg {
+  width: 17px;
+  height: 17px;
+}
+
+.actionLabel {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-strong);
+}
+
+.actionArrow {
+  flex-shrink: 0;
+  color: var(--text-faint);
+  transition: transform var(--dur-short) var(--ease-out);
+}
+
+.actionCard:hover .actionArrow {
+  transform: translateX(3px);
+  color: var(--primary);
+}
+
+/* ── Responsive ───────────────────────────────────────────────────── */
+
+/*
+ * TABLET (≤1023px) — the brief's tablet layout: primary chart on top, then the
+ * 2×2 metrics, then ranked data, then the distribution. The 60/40 split is a
+ * desktop-only arrangement, so the rows become a single column here.
+ */
+@media (max-width: 1023px) {
+  .row1,
+  .row2 {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+
+  .chartSlot {
+    order: 1;
+  }
+
+  .metricGrid {
+    order: 2;
+  }
+}
+
+/*
+ * MOBILE (≤767px) — the brief's phone order: hero metric → primary chart →
+ * remaining metrics. `display: contents` dissolves the metric wrapper so the
+ * hero card can sit above the chart while the other cards stay below it.
+ */
+@media (max-width: 767px) {
+  .page,
+  .contentPanel {
+    gap: var(--space-4);
+  }
+
+  .metricGrid {
+    display: contents;
+  }
+
+  .heroSlot {
+    order: 1;
+  }
+
+  .chartSlot {
+    order: 2;
+  }
+
+  .metricSlot {
+    order: 3;
+  }
+}
+
+@media (max-width: 640px) {
+  .actionsGrid {
+    grid-template-columns: 1fr;
+  }
+
+  /* Two tabs share the full width instead of hugging their labels. */
+  .screenSwitch {
+    align-self: stretch;
+    display: flex;
+  }
+
+  .screenTab {
+    flex: 1;
+    min-width: 0;
+    justify-content: center;
+    gap: var(--space-1);
+    padding: 0.45rem 0.6rem;
+    font-size: 0.78rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .screenTabIcon {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+  }
+
+  .introTitle {
+    font-size: 1.15rem;
+  }
+}
+
+@media (max-width: 380px) {
+  .screenTab {
+    font-size: 0.72rem;
+    padding: 0.4rem 0.4rem;
+  }
+}
+
+/* ── Reduced motion ───────────────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  .actionCard:hover {
+    transform: none;
+  }
+
+  .actionCard:hover .actionArrow {
+    transform: none;
+  }
+
+  .contentPanel {
+    transition: none;
+  }
+
+  .contentPanelOut {
+    transform: none;
+  }
+}

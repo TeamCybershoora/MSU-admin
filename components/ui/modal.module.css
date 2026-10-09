@@ -1,0 +1,227 @@
+/* ── Modal Overlay ─────────────────────────────────────── */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(4px);
+  animation: fadeIn 0.15s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* ── Modal Card ─────────────────────────────────────── */
+
+.modal {
+  position: relative;
+  width: 100%;
+  max-width: 440px;
+  /* Fallback for browsers without dvh support, then viewport-aware cap.
+     The modal is content-sized but never taller than the viewport, so it
+     always stays on screen (the overlay provides the 1.5rem gutter). */
+  max-height: calc(100vh - 3rem);
+  max-height: calc(100dvh - 3rem);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--card);
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  box-shadow:
+    0 20px 60px -10px rgba(0, 0, 0, 0.2),
+    0 8px 24px rgba(0, 0, 0, 0.1);
+  padding: 2rem;
+  animation: slideUp 0.2s ease;
+}
+
+/* Make forms inside modal flex columns so ModalScrollable works.
+   NOTE: these must use `flex-basis: auto`, not `0`. The modal is sized by its
+   content (it only has a max-height), so a `flex-basis: 0` child contributes
+   zero height to the modal's intrinsic size and collapses to 0px — which made
+   the modal render as a small empty white box with the form clipped away.
+   With `auto` the content still defines the height, but `flex-shrink: 1` +
+   `min-height: 0` lets the body shrink and scroll once the viewport cap is
+   reached. */
+.modal form {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  /* Forms wrap their own scrolling body (ModalScrollable) so the header and
+     footer stay pinned; forms that don't get a scrolling body scroll as a
+     whole instead of being clipped. */
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.modalScrollable {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.closeBtn {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: color-mix(in srgb, var(--foreground) 40%, var(--muted));
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.closeBtn:hover {
+  background: rgba(220, 38, 38, 0.08);
+  color: #dc2626;
+}
+
+.closeBtn svg {
+  width: 18px;
+  height: 18px;
+}
+
+.modalIcon {
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  margin: 0 auto 1rem;
+  color: #fff;
+}
+
+.modalIcon svg {
+  width: 24px;
+  height: 24px;
+}
+
+.iconDanger {
+  background: rgba(220, 38, 38, 0.1);
+  color: #dc2626;
+}
+
+.iconWarning {
+  background: rgba(217, 119, 6, 0.1);
+  color: #d97706;
+}
+
+.iconInfo {
+  background: rgba(21, 97, 109, 0.1);
+  color: #15616d;
+}
+
+.modalTitle {
+  font-family: var(--font-playfair), Georgia, serif;
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--foreground);
+  margin: 0 0 0.5rem;
+  text-align: center;
+}
+
+.modalDesc {
+  font-size: 0.88rem;
+  color: color-mix(in srgb, var(--foreground) 60%, var(--muted));
+  margin: 0 0 1.5rem;
+  text-align: center;
+  line-height: 1.5;
+}
+
+.actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: center;
+}
+
+/* ── Dark mode ─────────────────────────────────────── */
+
+:global(html.dark) .modal {
+  background: #2c2b2d;
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+/* ── Mobile ────────────────────────────────
+   Below 600px the overlay gutter and modal padding shrink so the content
+   column keeps usable width; the modal itself is already fluid
+   (width: 100%, capped by max-width, height capped by 100dvh). */
+
+@media (max-width: 600px) {
+  .overlay {
+    padding: 1rem;
+  }
+
+  .modal {
+    padding: 1.25rem;
+  }
+}
+
+/* ── Print ───────────────────────────────────────
+   Modals are screen affordances. When a modal contains a printable document
+   (e.g. the Statement of Marks), the overlay must stop being a fixed, centred
+   container so the document can render at the top of the page.
+
+   `backdrop-filter` is dropped as well: it creates a containing block for
+   `position: fixed` descendants, which would otherwise capture the printable
+   document instead of the page. */
+
+@media print {
+  .overlay {
+    position: static;
+    inset: auto;
+    display: block;
+    padding: 0;
+    background: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    animation: none;
+  }
+
+  .modal {
+    width: auto;
+    max-width: none;
+    max-height: none;
+    overflow: visible;
+    padding: 0;
+    background: none;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    animation: none;
+  }
+
+  .modalScrollable {
+    overflow: visible;
+  }
+
+  .closeBtn {
+    display: none !important;
+  }
+}

@@ -1,0 +1,143 @@
+/* ── DonutChart ─────────────────────────────────────────────────────── */
+
+.wrap {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.svg {
+  width: auto;
+  height: 100%;
+  flex: 0 0 auto;
+}
+
+.track {
+  stroke: var(--surface-sunken);
+  stroke-width: 18;
+}
+
+/* Each segment grows from 0 to its share — all segments share the timing, so
+   the ring fills clockwise as one sweep. */
+.segment {
+  animation: donutSweep var(--donut-dur, 820ms) var(--ease-out) forwards;
+  transition:
+    stroke-width var(--dur-short) var(--ease-out),
+    transform var(--dur-short) var(--ease-out);
+  cursor: pointer;
+}
+
+.segmentActive {
+  /* thickened via the strokeWidth prop; the transform nudge is inline */
+}
+
+/* ── Centre ─────────────────────────────────────────────────────────── */
+
+.centerValue {
+  fill: var(--text-strong);
+  font-size: 26px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.centerLabel {
+  fill: var(--text-faint);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* ── Legend ─────────────────────────────────────────────────────────── */
+
+.legend {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  list-style: none;
+  min-width: 150px;
+  flex: 1 1 150px;
+}
+
+.legendItem {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 0.3rem 0.5rem;
+  border-radius: 9px;
+  font-size: 0.82rem;
+  transition: background var(--dur-fast) var(--ease-out);
+}
+
+.legendItemActive {
+  background: var(--surface-sunken);
+}
+
+.swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.legendLabel {
+  color: var(--text-body);
+  flex: 1;
+}
+
+.legendValue {
+  color: var(--text-strong);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Empty ──────────────────────────────────────────────────────────── */
+
+.empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-8) var(--space-4);
+  color: var(--text-faint);
+  font-size: 0.85rem;
+}
+
+/* ── Keyframes ──────────────────────────────────────────────────────── */
+
+@keyframes donutSweep {
+  from {
+    stroke-dasharray: 0 var(--c);
+  }
+  to {
+    stroke-dasharray: var(--len) var(--c);
+  }
+}
+
+/* ── Responsive ─────────────────────────────────────────────────────── */
+
+@media (max-width: 520px) {
+  /* Ring above its legend instead of squeezing both onto one row. */
+  .wrap {
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+
+  .svg {
+    max-height: 190px;
+  }
+
+  .legend {
+    width: 100%;
+    min-width: 0;
+    flex: 0 0 auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .segment {
+    animation: none;
+    transition: none;
+  }
+}

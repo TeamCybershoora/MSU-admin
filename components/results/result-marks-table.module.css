@@ -1,0 +1,189 @@
+/* ==========================================================================
+   ResultMarksTable — print-first marks table for the Statement of Marks.
+
+   Colours are fixed (not theme variables) because the document is an official
+   paper artifact: it must look identical in light mode, dark mode and print.
+   The palette is the document's own — navy-black ink, warm gold keylines and a
+   cream header band — so the grid reads as part of the same printed sheet as
+   the border and the rest of the statement.
+   ========================================================================== */
+
+.section {
+  margin-top: 8px;
+}
+
+.sectionTitle {
+  font-family: var(--font-playfair), Georgia, "Times New Roman", serif;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: #232c38;
+  margin: 0 0 4px;
+  padding-bottom: 2px;
+  border-bottom: 1px solid #d8c7a4;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  color: #1e2733;
+}
+
+.caption {
+  caption-side: top;
+  text-align: left;
+  font-size: 8.5px;
+  font-style: italic;
+  color: #6f6656;
+  padding-bottom: 2px;
+}
+
+.table th,
+.table td {
+  border: 1px solid #d8c7a4;
+  /* Deliberately dense: this is the only part of the sheet whose height grows
+     with the data (a nine-subject statement with long titles runs to two lines
+     per row), so the rhythm here has to leave the rest of the document room to
+     stay on one A4 page without being clipped. */
+  padding: 1.5px 6px;
+  vertical-align: top;
+  line-height: 1.25;
+}
+
+.table thead th {
+  background: #faf5e9;
+  color: #54432a;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-align: left;
+  vertical-align: bottom;
+  padding: 3px 6px;
+}
+
+.table tbody tr:nth-child(even) {
+  background: #fdfbf5;
+}
+
+.nameCell {
+  font-size: 10px;
+  /* Long subject names wrap onto a second line instead of being clipped. */
+  overflow-wrap: anywhere;
+}
+
+.numCell,
+.numCellStrong {
+  font-size: 10px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.numCellStrong {
+  font-weight: 700;
+}
+
+/* ── Column widths (fixed table layout keeps every row aligned) ───── */
+
+.colIndex {
+  width: 24px;
+  text-align: center;
+}
+
+.colCode {
+  width: 64px;
+  font-family: var(--font-geist-mono), "Courier New", monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.02em;
+}
+
+.colName {
+  width: auto;
+}
+
+.colNum {
+  width: 48px;
+  text-align: center;
+}
+
+.colStatus {
+  width: 82px;
+  text-align: center;
+  font-size: 9px;
+  /* Kept narrow-side padded so the "Compartment" label can never spill past
+     the table's right border and into the frame's gutter. */
+  padding-left: 3px;
+  padding-right: 3px;
+}
+
+/* ── Totals ───────────────────────────────────────────────────────── */
+
+.table tfoot td {
+  background: #faf5e9;
+  border-top: 1.4px solid #bda172;
+  font-size: 10px;
+}
+
+.totalLabel {
+  text-align: right;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #54432a;
+}
+
+/* ── Compartment subjects ─────────────────────────────────────────── */
+
+.backlogRow td {
+  background: #fdf6ea;
+}
+
+.backlogMark {
+  color: #8f2222;
+  font-weight: 700;
+  margin-left: 2px;
+}
+
+/*
+ * Subtle outlined marker, in the document's warm tone — deliberately not a
+ * saturated dashboard warning badge.
+ */
+.compartment {
+  display: inline-block;
+  max-width: 100%;
+  font-size: 8px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #8a5416;
+  border: 1px solid #d8bd94;
+  padding: 1px 3px;
+  white-space: nowrap;
+}
+
+/* ── Subject status ───────────────────────────────────────────────── */
+
+.statusPass {
+  color: #2c5d3f;
+  font-weight: 700;
+}
+
+.statusFail {
+  color: #8f2222;
+  font-weight: 700;
+}
+
+.statusAbsent {
+  color: #8a5416;
+  font-weight: 700;
+}
+
+.footnote {
+  margin: 5px 0 0;
+  font-size: 8.5px;
+  font-style: italic;
+  color: #6f6656;
+}
