@@ -34,6 +34,9 @@ import {
   Layers,
   Megaphone,
   Inbox,
+  Newspaper,
+  Camera,
+  Crown,
 } from "lucide-react";
 import { getStoredToken } from "@/lib/auth";
 import Card, { CardHeader, StatCard } from "@/components/ui/card";
@@ -43,7 +46,12 @@ import styles from "./page.module.css";
 interface DashboardStats {
   totalStudents: number;
   totalResults: number;
-  totalSyllabi: number;
+  /** Every persisted syllabus document: structured + programme-level. */
+  totalSyllabus: number;
+  /** One document per programme + academic session + semester. */
+  totalStructuredSyllabus?: number;
+  /** One official programme-wide PDF per programme + academic session. */
+  totalProgrammeSyllabus?: number;
   totalFaculty: number | null;
   pendingApplications: number | null;
   upcomingExams: number | null;
@@ -73,9 +81,12 @@ const QUICK_ACTIONS = [
   { href: "/admin/academic-structure", label: "Academic Structure", icon: Layers, description: "Manage programmes, semesters and subjects" },
   { href: "/admin/results", label: "Manage Results", icon: FileText, description: "Upload and manage result records" },
   { href: "/admin/notices", label: "Notices", icon: Megaphone, description: "Publish and manage notices" },
+  { href: "/admin/news", label: "News Management", icon: Newspaper, description: "Publish and manage news posts" },
+  { href: "/admin/spotlight", label: "Spotlight Management", icon: Camera, description: "Manage spotlight highlights" },
+  { href: "/admin/leadership", label: "Leadership Management", icon: Crown, description: "Manage leadership profiles" },
   { href: "/admin/syllabus", label: "Manage Syllabus", icon: BookOpen, description: "Upload syllabus and documents" },
   { href: "/admin/colleges", label: "Manage Colleges", icon: Building2, description: "Manage affiliated colleges and PDF" },
-  { href: "/admin/enquiries/admission", label: "Inquiry Management", icon: Inbox, description: "Review and respond to enquiries" },
+  { href: "/admin/enquiries/admission", label: "Enquiry Management", icon: Inbox, description: "Review and respond to enquiries" },
 ];
 
 export default function AdminDashboardPage() {
@@ -166,7 +177,7 @@ export default function AdminDashboardPage() {
             />
             <StatCard
               label="Syllabus Records"
-              value={stats?.totalSyllabi ?? 0}
+              value={stats?.totalSyllabus ?? 0}
               icon={<BookOpen />}
               variant="muted"
             />
@@ -247,7 +258,19 @@ export default function AdminDashboardPage() {
           </div>
           <div className={styles.infoItem}>
             <span className={styles.infoLabel}>Syllabus Documents</span>
-            <span className={styles.infoValue}>{stats?.totalSyllabi ?? "—"}</span>
+            <span className={styles.infoValue}>{stats?.totalSyllabus ?? "—"}</span>
+          </div>
+          <div className={styles.infoItem}>
+            <span className={styles.infoLabel}>· Programme PDFs</span>
+            <span className={styles.infoValue}>
+              {stats?.totalProgrammeSyllabus ?? "—"}
+            </span>
+          </div>
+          <div className={styles.infoItem}>
+            <span className={styles.infoLabel}>· Structured (semester/subject)</span>
+            <span className={styles.infoValue}>
+              {stats?.totalStructuredSyllabus ?? "—"}
+            </span>
           </div>
           <div className={styles.infoItem}>
             <span className={styles.infoLabel}>Faculty Data</span>

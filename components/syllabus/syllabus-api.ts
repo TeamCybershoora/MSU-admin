@@ -137,15 +137,17 @@ export interface SyllabusListResult {
 }
 
 /** List structured syllabus records (pagination + optional filters). */
-export async function listSyllabi(params: {
+export async function listSyllabus(params: {
   page?: number;
   search?: string;
   programme?: string;
   academicSession?: string;
+  /** Page size (server caps this at 100). Defaults to the existing 50. */
+  limit?: number;
 }): Promise<SyllabusListResult> {
   const query = new URLSearchParams({
     page: String(params.page ?? 1),
-    limit: "50",
+    limit: String(params.limit ?? 50),
   });
   if (params.search) query.set("search", params.search);
   if (params.programme) query.set("programme", params.programme);
@@ -349,7 +351,7 @@ export async function listCatalogueProgrammes(): Promise<CatalogueProgramme[]> {
 }
 
 /** List programme-level syllabus documents (for the identity dropdown). */
-export async function fetchProgrammeSyllabi(): Promise<
+export async function fetchProgrammeSyllabus(): Promise<
   ProgrammeSyllabusRecord[]
 > {
   const outcome = await request("/api/admin/programme-syllabus", authInit("GET"));

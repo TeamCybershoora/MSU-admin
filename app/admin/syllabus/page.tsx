@@ -39,7 +39,7 @@
  * server-side; the UI is presentational only.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import {
   BookOpen,
   ChevronLeft,
@@ -53,10 +53,12 @@ import {
 } from "lucide-react";
 import Card, { CardHeader } from "@/components/ui/card";
 import Button from "@/components/ui/button";
+import SearchableSelect from "@/components/ui/searchable-select";
 import Modal, { ConfirmDialog } from "@/components/ui/modal";
 import EmptyState from "@/components/empty-state";
 import ErrorState from "@/components/error-state";
 import ProgrammeSyllabusPdfCard from "@/components/syllabus/programme-syllabus-pdf-card";
+import UploadedSyllabusPanel from "@/components/syllabus/uploaded-syllabus-panel";
 import SyllabusSemesterCard from "@/components/syllabus/syllabus-semester-card";
 import SyllabusSemesterForm, {
   type SemesterFormValues,
@@ -66,9 +68,9 @@ import {
   deleteSemester,
   deleteStructuredSyllabus,
   deleteSubject,
-  fetchProgrammeSyllabi,
+  fetchProgrammeSyllabus,
   listCatalogueProgrammes,
-  listSyllabi,
+  listSyllabus,
   readUploadedPdf,
   saveSyllabus,
   updateSemester,
@@ -132,7 +134,7 @@ function activeSubjectsOf(
 }
 
 export default function AdminSyllabusPage() {
-  const [syllabi, setSyllabi] = useState<SyllabusRecord[]>([]);
+  const [syllabus, setSyllabus] = useState<SyllabusRecord[]>([]);
   const [pagination, setPagination] = useState<Pagination>({
     page: 1,
     limit: 50,
@@ -187,36 +189,48 @@ export default function AdminSyllabusPage() {
   const [actionError, setActionError] = useState("");
   const [actionSuccess, setActionSuccess] = useState("");
 
-  const fetchSyllabi = useCallback(
+  // Which view of this section is open. Both views live on ONE page (and one
+  // route), so adding the read-only listing introduces no duplicate page.
+  const [view, setView] = useState<"manage" | "uploaded">("manage");
+
+  // Monotonic request id: only the newest request may write state, so a slow
+  // earlier response can never overwrite a newer (filtered) one.
+  const requestSeq = useRef(0);
+
+  const fetchSyllabus = useCallback(
     async (page = 1) => {
+      const seq = ++requestSeq.current;
       setLoading(true);
       setError("");
       try {
-        const result = await listSyllabi({
+        const result = await listSyllabus({
           page,
           search,
           programme: programmeFilter,
         });
 
+        if (seq !== requestSeq.current) return;
         if (!result.success) {
           setError(result.message || "Unable to load syllabus records.");
           return;
         }
 
-        setSyllabi(result.data ?? []);
+        setSyllabus(result.data ?? []);
         if (result.pagination) setPagination(result.pagination);
         if (result.filters) setFilters(result.filters);
       } finally {
-        setLoading(false);
+        if (seq === requestSeq.current) setLoading(false);
       }
     },
     [search, programmeFilter]
   );
 
+  // Single source of refetch: filter/search handlers only set state — an
+  // immediate refetch there would run a stale closure and race this request.
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    fetchSyllabi(1);
-  }, [fetchSyllabi]);
+    fetchSyllabus(1);
+  }, [fetchSyllabus]);
 
   const loadStructures = useCallback(async () => {
     setStructuresLoading(true);
@@ -267,14 +281,14 @@ export default function AdminSyllabusPage() {
     await Promise.all([loadStructures(), loadCatalogue()]);
   }, [loadStructures, loadCatalogue]);
 
-  const loadProgrammeSyllabi = useCallback(async () => {
-    setProgrammeDocs(await fetchProgrammeSyllabi());
+  const loadProgrammeSyllabus = useCallback(async () => {
+    setProgrammeDocs(await fetchProgrammeSyllabus());
   }, []);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    loadProgrammeSyllabi();
-  }, [loadProgrammeSyllabi]);
+    loadProgrammeSyllabus();
+  }, [loadProgrammeSyllabus]);
 
   /** Load (and cache) one structure's full curriculum for the selectors. */
   const ensureStructureDetail = useCallback(
@@ -298,16 +312,16 @@ export default function AdminSyllabusPage() {
       setActionError("");
       setActionSuccess(message);
       await Promise.all([
-        fetchSyllabi(pagination.page),
-        loadProgrammeSyllabi(),
+        fetchSyllabus(pagination.page),
+        loadProgrammeSyllabus(),
         loadStructures(),
         loadCatalogue(),
       ]);
       window.setTimeout(() => setActionSuccess(""), 4000);
     },
     [
-      fetchSyllabi,
-      loadProgrammeSyllabi,
+      fetchSyllabus,
+      loadProgrammeSyllabus,
       loadStructures,
       loadCatalogue,
       pagination.page,
@@ -322,10 +336,10 @@ export default function AdminSyllabusPage() {
 
   // Structured documents grouped by academic identity (programme + session);
   // legacy session-less documents form their own group.
-  const groupedSyllabi = useMemo<IdentityGroup[]>(() => {
+  const groupedSyllabus = useMemo<IdentityGroup[]>(() => {
     const groups = new Map<string, IdentityGroup>();
 
-    for (const record of syllabi) {
+    for (const record of syllabus) {
       const key = `${record.programme}::${record.academicSession ?? ""}`;
       const group = groups.get(key) ?? {
         key,
@@ -343,11 +357,11 @@ export default function AdminSyllabusPage() {
       if (b.academicSession === null) return -1;
       return a.academicSession.localeCompare(b.academicSession);
     });
-  }, [syllabi]);
+  }, [syllabus]);
 
   function handleSearch(e: React.FormEvent) {
     e.preventDefault();
-    fetchSyllabi(1);
+    fetchSyllabus(1);
   }
 
   // ── Semester CRUD ────────────────────────────────────────────
@@ -674,8 +688,48 @@ export default function AdminSyllabusPage() {
     }
   }
 
+  /*
+   * Section switch. A segmented control (not a strict tablist) because both
+   * views are rendered by this single page and route: "Manage Syllabus" is the
+   * existing management UI, "Uploaded Syllabus" the read-only listing of
+   * documents that are already stored.
+   */
+  const sectionSwitch = (
+    <div className={styles.tabs} role="group" aria-label="Syllabus section">
+      <button
+        type="button"
+        aria-pressed={view === "manage"}
+        className={`${styles.tab} ${view === "manage" ? styles.tabActive : ""}`}
+        onClick={() => setView("manage")}
+      >
+        Manage Syllabus
+      </button>
+      <button
+        type="button"
+        aria-pressed={view === "uploaded"}
+        className={`${styles.tab} ${view === "uploaded" ? styles.tabActive : ""}`}
+        onClick={() => setView("uploaded")}
+      >
+        Uploaded Syllabus
+      </button>
+    </div>
+  );
+
+  // Read-only view: an early return keeps the existing management JSX untouched
+  // (its data loading stays exactly as it was).
+  if (view === "uploaded") {
+    return (
+      <div className={styles.page}>
+        {sectionSwitch}
+        <UploadedSyllabusPanel />
+      </div>
+    );
+  }
+
   return (
     <div className={styles.page}>
+      {sectionSwitch}
+
       {/* ── Official Programme Syllabus ─────────────────────────────
           ONE PDF per ProgrammeStructure identity (programme + session),
           independent of — and usable without — any semester records.     */}
@@ -687,7 +741,7 @@ export default function AdminSyllabusPage() {
         onRetryStructures={loadStructures}
         onRefreshStructures={refreshStructureSources}
         docs={programmeDocs}
-        onChanged={loadProgrammeSyllabi}
+        onChanged={loadProgrammeSyllabus}
       />
 
       {/* ── Toolbar ─────────────────────────────────────────────── */}
@@ -708,7 +762,6 @@ export default function AdminSyllabusPage() {
                   className={styles.clearBtn}
                   onClick={() => {
                     setSearch("");
-                    setTimeout(() => fetchSyllabi(1), 0);
                   }}
                 >
                   <X size={14} />
@@ -717,21 +770,21 @@ export default function AdminSyllabusPage() {
             </div>
             <div className={styles.filterRow}>
               <Filter size={14} />
-              <select
+              <SearchableSelect
+                id="syllabus-programme-filter"
+                variant="compact"
+                label="Filter by programme"
+                placeholder="All Programmes"
                 value={programmeFilter}
-                onChange={(e) => {
-                  setProgrammeFilter(e.target.value);
-                  setTimeout(() => fetchSyllabi(1), 0);
+                options={[
+                  { value: "", label: "All Programmes" },
+                  ...programmeOptions.map((p) => ({ value: p, label: p })),
+                ]}
+                triggerClassName={styles.select}
+                onChange={(value) => {
+                  setProgrammeFilter(value);
                 }}
-                className={styles.select}
-              >
-                <option value="">All Programmes</option>
-                {programmeOptions.map((p) => (
-                  <option key={p} value={p}>
-                    {p}
-                  </option>
-                ))}
-              </select>
+              />
             </div>
             <Button type="submit" variant="primary" size="sm">
               <Search size={14} /> Search
@@ -771,9 +824,9 @@ export default function AdminSyllabusPage() {
           <ErrorState
             title="Unable to load syllabus"
             description={error}
-            onRetry={() => fetchSyllabi(pagination.page)}
+            onRetry={() => fetchSyllabus(pagination.page)}
           />
-        ) : syllabi.length === 0 ? (
+        ) : syllabus.length === 0 ? (
           <EmptyState
             icon={<BookOpen />}
             title="No syllabus documents found"
@@ -782,7 +835,7 @@ export default function AdminSyllabusPage() {
         ) : (
           <>
             <div className={styles.programmeGroups}>
-              {groupedSyllabi.map((group) => (
+              {groupedSyllabus.map((group) => (
                 <section key={group.key} className={styles.programmeBlock}>
                   <div className={styles.programmeHeader}>
                     <h3 className={styles.programmeName}>
@@ -829,7 +882,7 @@ export default function AdminSyllabusPage() {
                   variant="secondary"
                   size="sm"
                   disabled={pagination.page <= 1}
-                  onClick={() => fetchSyllabi(pagination.page - 1)}
+                  onClick={() => fetchSyllabus(pagination.page - 1)}
                 >
                   <ChevronLeft size={14} /> Previous
                 </Button>
@@ -840,7 +893,7 @@ export default function AdminSyllabusPage() {
                   variant="secondary"
                   size="sm"
                   disabled={pagination.page >= pagination.totalPages}
-                  onClick={() => fetchSyllabi(pagination.page + 1)}
+                  onClick={() => fetchSyllabus(pagination.page + 1)}
                 >
                   Next <ChevronRight size={14} />
                 </Button>

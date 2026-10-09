@@ -464,3 +464,244 @@
 :global(html.dark) .legacyBlock {
   border-top-color: rgba(255, 255, 255, 0.12);
 }
+
+/* ── Uploaded Syllabus listing (read-only document view) ─────────────
+   A self-contained listing: toolbar (search + programme/session filters),
+   then one row per stored document. Rows collapse to a single column at phone
+   widths so nothing is clipped.
+   ───────────────────────────────────────────────────────────────── */
+
+.docToolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.docSearch {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1;
+  min-width: 15rem;
+  padding: 0.5rem 0.75rem;
+  background: rgba(21, 97, 109, 0.04);
+  border: 1.5px solid rgba(21, 97, 109, 0.12);
+  border-radius: 10px;
+}
+
+.docSearch svg {
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.docSearch input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 0.85rem;
+  color: var(--foreground);
+}
+
+.docClear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.15rem;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.docClear:hover {
+  color: var(--foreground);
+  background: rgba(21, 97, 109, 0.08);
+}
+
+.docFilterRow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  color: var(--muted);
+}
+
+.docSelect {
+  padding: 0.45rem 0.6rem;
+  font-size: 0.83rem;
+  color: var(--foreground);
+  background: rgba(21, 97, 109, 0.04);
+  border: 1.5px solid rgba(21, 97, 109, 0.12);
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.docClearFilters {
+  padding: 0.4rem 0.6rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--accent);
+  background: transparent;
+  border: 1px solid rgba(21, 97, 109, 0.18);
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.docClearFilters:hover {
+  background: rgba(21, 97, 109, 0.06);
+}
+
+.docCount {
+  margin: 0 0 0.6rem;
+  font-size: 0.8rem;
+  color: color-mix(in srgb, var(--foreground) 55%, var(--muted));
+}
+
+.docList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.docRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 0.75rem 1rem;
+  padding: 0.75rem 0.9rem;
+  background: rgba(255, 255, 255, 0.5);
+  border: 1px solid rgba(21, 97, 109, 0.1);
+  border-radius: 12px;
+}
+
+.docMain {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+.docTitle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--foreground);
+  word-break: break-word;
+}
+
+.docTitle svg {
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.docMeta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  font-size: 0.78rem;
+  color: color-mix(in srgb, var(--foreground) 55%, var(--muted));
+}
+
+.docMeta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.docBadge {
+  padding: 0.1rem 0.4rem;
+  border-radius: 6px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #0f766e;
+  background: rgba(21, 97, 109, 0.12);
+}
+
+.docDate {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.78rem;
+  white-space: nowrap;
+  color: color-mix(in srgb, var(--foreground) 55%, var(--muted));
+}
+
+.docActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.docLoading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 2.5rem 1rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.docSpinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid rgba(21, 97, 109, 0.18);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: docSpin 0.8s linear infinite;
+}
+
+@keyframes docSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+:global(html.dark) .docSearch,
+:global(html.dark) .docSelect {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.08);
+  color-scheme: dark;
+}
+
+:global(html.dark) .docRow {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+:global(html.dark) .docBadge {
+  color: #5eead4;
+  background: rgba(94, 234, 212, 0.14);
+}
+
+@media (max-width: 700px) {
+  .docToolbar {
+    align-items: stretch;
+  }
+
+  .docSearch {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .docRow {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: flex-start;
+  }
+
+  .docActions {
+    justify-content: flex-start;
+  }
+}

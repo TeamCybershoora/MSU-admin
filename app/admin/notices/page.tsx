@@ -39,6 +39,7 @@ import { getStoredToken } from "@/lib/auth";
 import Card, { CardHeader } from "@/components/ui/card";
 import Button from "@/components/ui/button";
 import Badge from "@/components/ui/badge";
+import SearchableSelect from "@/components/ui/searchable-select";
 import Modal, { ConfirmDialog } from "@/components/ui/modal";
 import RecordList, { RecordCard, RecordField } from "@/components/ui/record-list";
 import EmptyState from "@/components/empty-state";
@@ -249,20 +250,50 @@ export default function AdminNoticesPage() {
               {/* Filter selects only update state. The refetch happens in the
                   effect above, with the new value — calling fetchNotices()
                   here would use the previous render's closure (stale filter). */}
-              <select value={contentTypeFilter} onChange={(e) => setContentTypeFilter(e.target.value)} className={styles.select}>
-                <option value="">All Types</option>
-                {VALID_CONTENT_TYPES.map((ct) => (<option key={ct} value={ct}>{ct.charAt(0).toUpperCase() + ct.slice(1)}</option>))}
-              </select>
+              <SearchableSelect
+                id="notices-content-type-filter"
+                variant="compact"
+                label="Filter by content type"
+                placeholder="All Types"
+                value={contentTypeFilter}
+                options={[
+                  { value: "", label: "All Types" },
+                  ...VALID_CONTENT_TYPES.map((ct) => ({
+                    value: ct,
+                    label: ct.charAt(0).toUpperCase() + ct.slice(1),
+                  })),
+                ]}
+                triggerClassName={styles.select}
+                onChange={(value) => setContentTypeFilter(value)}
+              />
             </div>
-            <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className={styles.select}>
-              <option value="">All Categories</option>
-              {NOTICE_CATEGORIES.map((cat) => (<option key={cat} value={cat}>{cat}</option>))}
-            </select>
-            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className={styles.select}>
-              <option value="">All Status</option>
-              <option value="published">Published</option>
-              <option value="draft">Draft</option>
-            </select>
+            <SearchableSelect
+              id="notices-category-filter"
+              variant="compact"
+              label="Filter by category"
+              placeholder="All Categories"
+              value={categoryFilter}
+              options={[
+                { value: "", label: "All Categories" },
+                ...NOTICE_CATEGORIES.map((cat) => ({ value: cat, label: cat })),
+              ]}
+              triggerClassName={styles.select}
+              onChange={(value) => setCategoryFilter(value)}
+            />
+            <SearchableSelect
+              id="notices-status-filter"
+              variant="compact"
+              label="Filter by status"
+              placeholder="All Status"
+              value={statusFilter}
+              options={[
+                { value: "", label: "All Status" },
+                { value: "published", label: "Published" },
+                { value: "draft", label: "Draft" },
+              ]}
+              triggerClassName={styles.select}
+              onChange={(value) => setStatusFilter(value)}
+            />
             <Button variant="primary" size="sm" onClick={() => { setCreateForm(blankForm()); setCreateError(""); setCreateSuccess(""); resetImageState(); setShowCreateForm(true); }}><Plus size={14} /> Add Notice</Button>
           </div>
         </div>

@@ -181,7 +181,7 @@ export async function GET(req: Request) {
       ];
     }
 
-    const [syllabi, total] = await Promise.all([
+    const [syllabus, total] = await Promise.all([
       Syllabus.find(query)
         .sort({ programme: 1, academicSession: 1, semester: 1 })
         .skip(skip)
@@ -194,7 +194,7 @@ export async function GET(req: Request) {
 
     return NextResponse.json({
       success: true,
-      data: syllabi.map((s) => ({
+      data: syllabus.map((s) => ({
         id: s._id,
         programme: s.programme,
         academicSession: s.academicSession ?? null,

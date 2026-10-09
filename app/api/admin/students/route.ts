@@ -1,9 +1,18 @@
 import { NextResponse } from "next/server";
 import mongoose from "mongoose";
 import connectDB from "@/lib/mongodb";
-import Student, { toSafeStudent } from "@/models/Student";
+import Student, {
+  toReviewStudent,
+  toSafeStudent,
+  type IStudent,
+} from "@/models/Student";
 import { authenticateAdmin } from "@/lib/admin-auth";
 import { createRateLimiter } from "@/lib/rate-limit";
+import {
+  APPLICATION_STATUSES,
+  accountStatusForStudentStatus,
+  parseApplicationStatus,
+} from "@/lib/student-review";
 import {
   escapeRegex,
   isDeleteConfirmationValid,
@@ -14,8 +23,11 @@ import {
  * GET /api/admin/students
  *
  * List, search, and filter students.
- * Query params: search, course, status, page, limit
+ * Query params: search, course, status, applicationStatus, page, limit
+ *   search: name / email / username / phone (case-insensitive).
  *   status: "ACTIVE" | "INACTIVE" — omitted = ALL (the existing default).
+ *   applicationStatus: pending | needs_correction | verified | rejected |
+ *     enrolled — omitted/invalid = ALL.
  * Protected: requires admin JWT.
  */
 
@@ -73,6 +85,7 @@ export async function GET(req: Request) {
           { name: { $regex: escapeRegex(search), $options: "i" } },
           { email: { $regex: escapeRegex(search), $options: "i" } },
           { username: { $regex: escapeRegex(search), $options: "i" } },
+          { phone: { $regex: escapeRegex(search), $options: "i" } },
         ],
       });
     }
@@ -83,6 +96,15 @@ export async function GET(req: Request) {
 
     // Default (omitted / invalid) = ALL students, preserving the existing list.
     const status = rawStatus ? parseStudentStatus(rawStatus) : null;
+
+    // Phase 4 application-review filter. Omitted/invalid = ALL.
+    // Legacy records with no stored applicationStatus are treated as verified,
+    // so they appear under "verified" and never in the pending/correction queues.
+    const rawApplicationStatus =
+      url.searchParams.get("applicationStatus")?.trim() || "";
+    const applicationStatus = rawApplicationStatus
+      ? parseApplicationStatus(rawApplicationStatus)
+      : null;
     if (status === "INACTIVE") {
       conditions.push({ status: "INACTIVE" });
     } else if (status === "ACTIVE") {
@@ -92,12 +114,32 @@ export async function GET(req: Request) {
       });
     }
 
+    if (applicationStatus === "verified") {
+      // The verified FILTER must select exactly the records that DISPLAY as
+      // "verified" (effectiveApplicationStatus): a stored "verified", a legacy
+      // record with no stored value, an explicit null, AND any unrecognised
+      // legacy value. The previous $or listed only stored-verified/missing/null,
+      // so a record carrying an unrecognised value rendered the "Verified" badge
+      // in the unfiltered list yet vanished from the Verified filter and from
+      // its pagination totals. $nin of the other statuses matches precisely the
+      // effective-verified set (missing and null fields are included by $nin).
+      const otherStatuses = APPLICATION_STATUSES.filter(
+        (value) => value !== "verified"
+      );
+      conditions.push({ applicationStatus: { $nin: [...otherStatuses] } });
+    } else if (applicationStatus) {
+      conditions.push({ applicationStatus });
+    }
+
     const query: Record<string, unknown> =
       conditions.length > 0 ? { $and: conditions } : {};
 
     const [students, total] = await Promise.all([
       Student.find(query)
-        .sort({ createdAt: -1 })
+        // `_id` tie-break: each page is a separate query, and MongoDB order is
+        // not stable for equal sort keys — without it, records created in the
+        // same instant can be duplicated or skipped across page boundaries.
+        .sort({ createdAt: -1, _id: -1 })
         .skip(skip)
         .limit(limit)
         .lean(),
@@ -109,19 +151,9 @@ export async function GET(req: Request) {
 
     return NextResponse.json({
       success: true,
-      data: students.map((s) => ({
-        id: s._id,
-        name: s.name,
-        email: s.email,
-        username: s.username,
-        course: s.course,
-        college: s.college,
-        phone: s.phone,
-        // Lean results do not apply schema defaults, so a legacy doc reads as ACTIVE.
-        status: s.status ?? "ACTIVE",
-        registeredAt: s.registeredAt,
-        createdAt: s.createdAt,
-      })),
+      // A safe review view: registration details + status + correction/history.
+      // Never includes the password field.
+      data: students.map((s) => toReviewStudent(s as unknown as IStudent)),
       pagination: {
         page,
         limit,
@@ -258,8 +290,13 @@ export async function PUT(req: Request) {
  * Activate or deactivate a student account. Mirrors the Admin status route.
  *
  * Body: { studentId, status: "ACTIVE" | "INACTIVE" }
- * - The student document is kept; only `status` changes.
- * - Fields, Results and every other record are untouched.
+ * - Two fields move together, so the two apps agree on the same access state:
+ *     `status`        — the admin app's management field (list badge + filter),
+ *     `accountStatus` — the CANONICAL shared-contract field that the public
+ *                       portal's resolvePortalAccess() enforces (active /
+ *                       inactive). Access is decided by `accountStatus` alone.
+ * - The student document is kept; only those two status fields change and no
+ *   other record (Fields, Results, …) is touched.
  * - Setting the status it already has is an idempotent success.
  * Protected: requires admin JWT.
  */
@@ -307,6 +344,10 @@ export async function PATCH(req: Request) {
     }
 
     student.status = status;
+    // Keep the canonical account-access state in step with the management
+    // status: without this, the public portal would keep granting access to a
+    // student the admin just deactivated (it reads accountStatus, not status).
+    student.accountStatus = accountStatusForStudentStatus(status);
     await student.save();
 
     return NextResponse.json({

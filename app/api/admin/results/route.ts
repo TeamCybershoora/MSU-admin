@@ -146,7 +146,9 @@ export async function GET(req: Request) {
 
     const [results, total] = await Promise.all([
       Result.find(query)
-        .sort({ createdAt: -1 })
+        // `_id` tie-break so separate page queries keep a stable order for
+        // results created in the same instant (no duplicates/gaps between pages).
+        .sort({ createdAt: -1, _id: -1 })
         .skip(skip)
         .limit(limit)
         .lean(),

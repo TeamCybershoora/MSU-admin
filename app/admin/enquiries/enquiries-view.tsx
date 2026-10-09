@@ -56,7 +56,7 @@
  * every record operation is keyed by the server-validated reference anyway.
  */
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Search,
   Eye,
@@ -73,6 +73,7 @@ import { getStoredToken } from "@/lib/auth";
 import Card, { CardHeader } from "@/components/ui/card";
 import Button from "@/components/ui/button";
 import Badge from "@/components/ui/badge";
+import SearchableSelect from "@/components/ui/searchable-select";
 import Modal, { ConfirmDialog, ModalScrollable } from "@/components/ui/modal";
 import RecordList, { RecordCard, RecordField } from "@/components/ui/record-list";
 import EmptyState from "@/components/empty-state";
@@ -346,11 +347,16 @@ export default function EnquiriesView({
 
   /* ── List ─────────────────────────────────────────── */
 
+  // Monotonic request id: only the newest request may write state, so a slow
+  // earlier response can never overwrite a newer (filtered) one.
+  const requestSeq = useRef(0);
+
   const fetchEnquiries = useCallback(
     async (page = 1) => {
       const token = getStoredToken();
       if (!token) return;
 
+      const seq = ++requestSeq.current;
       setLoading(true);
       setError("");
 
@@ -379,12 +385,14 @@ export default function EnquiriesView({
           headers: { Authorization: `Bearer ${token}` },
         });
 
+        if (seq !== requestSeq.current) return;
         if (!res.ok) {
           setError("Unable to load enquiries. Please try again.");
           return;
         }
 
         const data = await res.json();
+        if (seq !== requestSeq.current) return;
         if (data.success) {
           setEnquiries(data.data);
           setPagination(data.pagination);
@@ -392,9 +400,11 @@ export default function EnquiriesView({
           setError("Unable to load enquiries. Please try again.");
         }
       } catch {
-        setError("Unable to load enquiries. Please try again.");
+        if (seq === requestSeq.current) {
+          setError("Unable to load enquiries. Please try again.");
+        }
       } finally {
-        setLoading(false);
+        if (seq === requestSeq.current) setLoading(false);
       }
     },
     [search, statusFilter, inquiryTypeFilter, categoryFilter, classificationFilter, fixedType, isGeneral]
@@ -745,73 +755,86 @@ export default function EnquiriesView({
             {/* General only: INQUIRY TYPE is the topic the PUBLIC submitter
                 chose — read from the stored field by the server. */}
             {isGeneral && (
-              <select
+              <SearchableSelect
+                id="enquiries-inquiry-type-filter"
+                variant="compact"
+                label="Filter by inquiry type"
+                placeholder="All Inquiry Types"
                 value={inquiryTypeFilter}
-                onChange={(e) => applyFilter(setInquiryTypeFilter, e.target.value)}
-                className={styles.select}
-                aria-label="Filter by inquiry type"
-              >
-                <option value="">All Inquiry Types</option>
-                {GENERAL_INQUIRY_TYPES.map((value) => (
-                  <option key={value} value={value}>
-                    {GENERAL_INQUIRY_TYPE_LABELS[value]}
-                  </option>
-                ))}
-                <option value={INQUIRY_TYPE_UNSPECIFIED}>Unspecified</option>
-              </select>
+                options={[
+                  { value: "", label: "All Inquiry Types" },
+                  ...GENERAL_INQUIRY_TYPES.map((value) => ({
+                    value,
+                    label: GENERAL_INQUIRY_TYPE_LABELS[value],
+                  })),
+                  { value: INQUIRY_TYPE_UNSPECIFIED, label: "Unspecified" },
+                ]}
+                triggerClassName={styles.select}
+                onChange={(value) => applyFilter(setInquiryTypeFilter, value)}
+              />
             )}
 
             {/* General only: CATEGORY is a keyword search over the enquiry's
                 content. It is query-time only and never classifies anything. */}
             {isGeneral && (
-              <select
+              <SearchableSelect
+                id="enquiries-category-filter"
+                variant="compact"
+                label="Filter by category"
+                placeholder="All Categories"
                 value={categoryFilter}
-                onChange={(e) => applyFilter(setCategoryFilter, e.target.value)}
-                className={styles.select}
-                aria-label="Filter by category"
-              >
-                <option value="">All Categories</option>
-                {ENQUIRY_CATEGORIES.map((category) => (
-                  <option key={category.key} value={category.key}>
-                    {category.label}
-                  </option>
-                ))}
-              </select>
+                options={[
+                  { value: "", label: "All Categories" },
+                  ...ENQUIRY_CATEGORIES.map((category) => ({
+                    value: category.key,
+                    label: category.label,
+                  })),
+                ]}
+                triggerClassName={styles.select}
+                onChange={(value) => applyFilter(setCategoryFilter, value)}
+              />
             )}
 
             {/* General only: CLASSIFICATION reads what an admin explicitly
                 saved on the enquiry — the separate "saved" concept. */}
             {isGeneral && (
-              <select
+              <SearchableSelect
+                id="enquiries-classification-filter"
+                variant="compact"
+                label="Filter by saved classification"
+                placeholder="All Classifications"
                 value={classificationFilter}
-                onChange={(e) =>
-                  applyFilter(setClassificationFilter, e.target.value)
+                options={[
+                  { value: "", label: "All Classifications" },
+                  { value: "unclassified", label: "Unclassified" },
+                  ...GENERAL_CLASSIFICATIONS.map((value) => ({
+                    value,
+                    label: GENERAL_CLASSIFICATION_LABELS[value],
+                  })),
+                ]}
+                triggerClassName={styles.select}
+                onChange={(value) =>
+                  applyFilter(setClassificationFilter, value)
                 }
-                className={styles.select}
-                aria-label="Filter by saved classification"
-              >
-                <option value="">All Classifications</option>
-                <option value="unclassified">Unclassified</option>
-                {GENERAL_CLASSIFICATIONS.map((value) => (
-                  <option key={value} value={value}>
-                    {GENERAL_CLASSIFICATION_LABELS[value]}
-                  </option>
-                ))}
-              </select>
+              />
             )}
 
-            <select
+            <SearchableSelect
+              id="enquiries-status-filter"
+              variant="compact"
+              label="Filter by status"
+              placeholder="All Status"
               value={statusFilter}
-              onChange={(e) => applyFilter(setStatusFilter, e.target.value)}
-              className={styles.select}
-            >
-              <option value="">All Status</option>
-              {ENQUIRY_STATUSES.map((status) => (
-                <option key={status} value={status}>
-                  {STATUS_LABELS[status]}
-                </option>
-              ))}
-            </select>
+              options={[
+                { value: "", label: "All Status" },
+                ...ENQUIRY_STATUSES.map((status) => ({
+                  value: status,
+                  label: STATUS_LABELS[status],
+                })),
+              ]}
+              triggerClassName={styles.select}
+              onChange={(value) => applyFilter(setStatusFilter, value)}
+            />
           </div>
         </div>
       </Card>

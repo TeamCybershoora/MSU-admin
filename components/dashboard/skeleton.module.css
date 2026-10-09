@@ -1,0 +1,122 @@
+/* ── Skeletons ──────────────────────────────────────────────────────── */
+
+.block {
+  display: block;
+  border-radius: 8px;
+  background: linear-gradient(
+    90deg,
+    var(--surface-sunken) 25%,
+    color-mix(in srgb, var(--text-strong) 7%, var(--surface-sunken)) 50%,
+    var(--surface-sunken) 75%
+  );
+  background-size: 220% 100%;
+  /* Slow, calm shimmer — never a flash. */
+  animation: shimmer 2.2s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  0% { background-position: 220% 0; }
+  100% { background-position: -220% 0; }
+}
+
+/* ── Metric grid ────────────────────────────────────────────────────── */
+
+.metricGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+
+.metricCard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  min-height: 132px;
+  background: var(--surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-ambient);
+}
+
+.metricHead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.chip {
+  width: 38px;
+  height: 38px;
+  border-radius: var(--radius-control);
+  flex-shrink: 0;
+}
+
+.lineShort {
+  height: 12px;
+  width: 55%;
+}
+
+.value {
+  height: 28px;
+  width: 45%;
+  margin-top: auto;
+}
+
+/* ── Chart ──────────────────────────────────────────────────────────── */
+
+.chart {
+  display: flex;
+  align-items: flex-end;
+  padding: var(--space-4) 0;
+}
+
+.chartBars {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-3);
+  width: 100%;
+  height: 100%;
+}
+
+.bar {
+  flex: 1;
+  border-radius: 6px 6px 0 0;
+}
+
+/* ── Rows ───────────────────────────────────────────────────────────── */
+
+.rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.row:last-child {
+  border-bottom: none;
+}
+
+.lineWide {
+  height: 13px;
+  width: 40%;
+}
+
+.lineNarrow {
+  height: 13px;
+  width: 14%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .block {
+    animation: none;
+  }
+}

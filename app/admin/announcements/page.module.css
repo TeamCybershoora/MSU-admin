@@ -1,0 +1,372 @@
+/* Announcement Bar Management page — reuses the shared admin design tokens and
+   the News/Recruitment table + mobile record-card patterns. The Preview card
+   intentionally mirrors the PUBLIC announcement bar's gradient so an admin can
+   recognise what they are editing. */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.section {
+  padding: 1.5rem;
+}
+
+.hint {
+  margin: 0;
+  font-size: 0.82rem;
+  color: color-mix(in srgb, var(--foreground) 55%, var(--muted));
+}
+
+/* ── Live preview (mirrors the public bar) ───────────────────────── */
+
+.previewBar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  margin-top: 0.5rem;
+  padding: 0.7rem 1.1rem;
+  border-radius: 14px;
+  overflow: hidden;
+  color: #fff4e4;
+  background: linear-gradient(115deg, #16455f 0%, #309aa8 52%, #ffb05e 100%);
+}
+
+.previewBadge {
+  display: grid;
+  place-items: center;
+  width: 2.6rem;
+  height: 2.6rem;
+  flex: none;
+  border-radius: 0.85rem;
+  color: #fff4e4;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.previewCopy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.previewEyebrow {
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(255, 244, 228, 0.88);
+}
+
+.previewHeadline {
+  margin: 0;
+  font-family: var(--font-playfair), Georgia, serif;
+  font-weight: 800;
+  font-size: 1.25rem;
+  line-height: 1.05;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+}
+
+.previewSub {
+  margin: 0;
+  font-size: 0.74rem;
+  color: rgba(255, 244, 228, 0.88);
+  overflow-wrap: anywhere;
+}
+
+.previewCta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex: none;
+  padding: 0.45rem 0.85rem;
+  border-radius: 999px;
+  background: rgba(255, 248, 238, 0.9);
+  color: #0c3a52;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* ── Table ─────────────────────────────────────────────────────── */
+
+.tableWrapper {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+
+.table th {
+  text-align: left;
+  padding: 0.7rem 1rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: color-mix(in srgb, var(--foreground) 50%, var(--muted));
+  border-bottom: 1px solid rgba(21, 97, 109, 0.08);
+  white-space: nowrap;
+}
+
+.table td {
+  padding: 0.7rem 1rem;
+  border-bottom: 1px solid rgba(21, 97, 109, 0.04);
+  color: var(--foreground);
+  vertical-align: middle;
+}
+
+.table tbody tr:hover {
+  background: rgba(21, 97, 109, 0.03);
+}
+
+.nameCell {
+  font-weight: 600;
+  min-width: 220px;
+  max-width: 400px;
+}
+
+.rowTitle {
+  display: block;
+}
+
+.rowSummary {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin-top: 2px;
+  font-weight: 400;
+  font-size: 0.78rem;
+  color: color-mix(in srgb, var(--foreground) 55%, var(--muted));
+}
+
+.dateCell {
+  white-space: nowrap;
+  font-size: 0.8rem;
+  color: color-mix(in srgb, var(--foreground) 70%, var(--muted));
+}
+
+.orderCell {
+  font-variant-numeric: tabular-nums;
+  color: color-mix(in srgb, var(--foreground) 60%, var(--muted));
+}
+
+.actionsCell {
+  display: flex;
+  gap: 2px;
+}
+
+/* ── Loading ───────────────────────────────────────────────────── */
+
+.loadingState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem;
+  gap: 0.8rem;
+  color: color-mix(in srgb, var(--foreground) 50%, var(--muted));
+}
+
+.spinner {
+  width: 2rem;
+  height: 2rem;
+  border: 3px solid var(--border);
+  border-top-color: var(--muted);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ── Modal form ────────────────────────────────────────────────── */
+
+.modalTitle {
+  font-family: var(--font-playfair), Georgia, serif;
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--foreground);
+  margin: 0 0 0.35rem;
+  text-align: center;
+}
+
+.modalDesc {
+  margin: 0 0 1rem;
+  text-align: center;
+  font-size: 0.8rem;
+  color: color-mix(in srgb, var(--foreground) 50%, var(--muted));
+}
+
+.formFields {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.formField {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.formField label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--foreground) 75%, var(--muted));
+}
+
+.optional {
+  font-weight: 500;
+  font-size: 0.72rem;
+  color: color-mix(in srgb, var(--foreground) 45%, var(--muted));
+}
+
+.formField input,
+.formField select,
+.textarea {
+  background: rgba(255, 255, 255, 0.7);
+  border: 1.5px solid rgba(21, 97, 109, 0.12);
+  border-radius: 10px;
+  padding: 0.6rem 0.8rem;
+  font-size: 0.9rem;
+  color: var(--foreground);
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.2s;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.textarea {
+  resize: vertical;
+  min-height: 64px;
+}
+
+.formField input:focus,
+.formField select:focus,
+.textarea:focus {
+  border-color: var(--accent);
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(224, 122, 82, 0.1);
+}
+
+.formHint {
+  font-size: 0.72rem;
+  color: color-mix(in srgb, var(--foreground) 50%, var(--muted));
+}
+
+.inlineRow {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.88rem;
+  color: var(--foreground);
+}
+
+.inlineRow input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+}
+
+.scheduleGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.8rem;
+}
+
+.tzNote {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: -0.3rem 0 0;
+  font-size: 0.74rem;
+  color: color-mix(in srgb, var(--foreground) 55%, var(--muted));
+}
+
+.modalActions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: center;
+  margin-top: 1.5rem;
+}
+
+.formError {
+  margin: 1rem 0 0;
+  padding: 0.6rem 0.8rem;
+  border-radius: 10px;
+  font-size: 0.85rem;
+  color: #dc2626;
+  background: rgba(220, 38, 38, 0.06);
+  border: 1px solid rgba(220, 38, 38, 0.15);
+  text-align: center;
+}
+
+.formSuccess {
+  margin: 1rem 0 0;
+  padding: 0.6rem 0.8rem;
+  border-radius: 10px;
+  font-size: 0.85rem;
+  color: #059669;
+  background: rgba(5, 150, 105, 0.06);
+  border: 1px solid rgba(5, 150, 105, 0.15);
+  text-align: center;
+}
+
+/* ── Dark mode ─────────────────────────────────────────────────── */
+
+:global(html.dark) .table th {
+  border-bottom-color: rgba(255, 255, 255, 0.06);
+}
+
+:global(html.dark) .table td {
+  border-bottom-color: rgba(255, 255, 255, 0.03);
+}
+
+:global(html.dark) .formField input,
+:global(html.dark) .formField select,
+:global(html.dark) .textarea {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+/* ── Mobile (<=600px) ─────────────────────────────────────────── */
+
+@media (max-width: 600px) {
+  .section {
+    padding: 1rem;
+  }
+
+  /* The desktop table is replaced by the mobile record cards. */
+  .tableWrapper {
+    display: none;
+  }
+
+  .scheduleGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .previewBar {
+    flex-wrap: wrap;
+  }
+
+  .previewHeadline {
+    font-size: 1.1rem;
+  }
+}

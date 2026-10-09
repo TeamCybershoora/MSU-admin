@@ -79,3 +79,130 @@ select:focus {
     0 0 30px rgba(255, 177, 115, 0.08) !important;
   transition: border-color 0.3s ease, box-shadow 0.3s ease;
 }
+
+/* ══════════════════════════════════════════════════════════════════
+   MSU ADMIN — DESIGN TOKENS
+   ══════════════════════════════════════════════════════════════════
+
+   Two layers, deliberately separated (no misleading names):
+     1. BRAND tokens   (--msu-*)      — the raw palette, never used directly
+                                        by components.
+     2. SEMANTIC tokens (--surface*, --text*, --primary, …) — what a
+                                        component actually means.
+
+   The legacy variables above (--muted, --border, --accent, --accent-2)
+   are KEPT UNCHANGED because older admin pages consume them directly.
+   New/dashboard work should use the semantic tokens below instead.
+   ══════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* ── 1. Brand palette (source of truth) ─────────────────────────── */
+  --msu-cream: #ffecd1;
+  --msu-navy: #001524;
+  --msu-orange: #ff7d00;
+  --msu-teal: #15616d;
+  --msu-white: #ffffff;
+  --msu-coral: #e07a52;
+  --msu-peach: #f0b285;
+  --msu-beige: #f2e7de;
+
+  /* ── 2. Semantic surfaces ───────────────────────────────────────── */
+  --surface: var(--msu-white);
+  --surface-2: var(--msu-beige);
+  --surface-warm: color-mix(in srgb, var(--msu-peach) 24%, var(--msu-white));
+  --surface-sunken: color-mix(in srgb, var(--msu-navy) 4%, var(--msu-white));
+  --surface-inverse: var(--msu-navy);
+
+  /* ── 3. Semantic text ───────────────────────────────────────────── */
+  --text-strong: var(--msu-navy);
+  --text-body: color-mix(in srgb, var(--msu-navy) 82%, transparent);
+  --text-muted: color-mix(in srgb, var(--msu-navy) 55%, transparent);
+  --text-faint: color-mix(in srgb, var(--msu-navy) 38%, transparent);
+  --text-on-accent: var(--msu-white);
+
+  /* ── 4. Semantic accents ────────────────────────────────────────── */
+  --primary: var(--msu-teal);
+  --primary-weak: color-mix(in srgb, var(--msu-teal) 10%, transparent);
+  --secondary: var(--msu-orange);
+  --secondary-weak: color-mix(in srgb, var(--msu-orange) 12%, transparent);
+  --highlight: var(--msu-coral);
+  --highlight-weak: color-mix(in srgb, var(--msu-coral) 12%, transparent);
+  --success: var(--msu-teal);
+  --warning: var(--msu-orange);
+  --danger: #c1440e;
+
+  /* ── 5. Borders & elevation ─────────────────────────────────────── */
+  --border-subtle: color-mix(in srgb, var(--msu-navy) 10%, transparent);
+  --border-strong: color-mix(in srgb, var(--msu-navy) 16%, transparent);
+  --shadow-ambient: 0 8px 24px rgba(0, 21, 36, 0.08);
+  --shadow-hover: 0 14px 32px rgba(0, 21, 36, 0.12);
+
+  /* ── 6. Radius ──────────────────────────────────────────────────── */
+  --radius-card: 16px;
+  --radius-control: 12px;
+  --radius-pill: 999px;
+
+  /* ── 7. Spacing scale ───────────────────────────────────────────── */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+
+  /* ── 8. Motion tokens (mirror of components/dashboard/motion.ts) ── */
+  --dur-fast: 120ms;
+  --dur-short: 200ms;
+  --dur-medium: 320ms;
+  --dur-long: 620ms;
+  --dur-data: 900ms;
+  --dur-chart: 1400ms;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --ease-inout: cubic-bezier(0.65, 0, 0.35, 1);
+  /* Material-style standard curve for expand/collapse (dropdowns, menus). */
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ── Dark-mode parity (adapt the semantic layer, not a raw inversion) ── */
+html.dark {
+  --surface: #2c2b2d;
+  --surface-2: #26252a;
+  --surface-warm: color-mix(in srgb, var(--msu-peach) 8%, #2c2b2d);
+  --surface-sunken: rgba(0, 0, 0, 0.25);
+  --surface-inverse: #fff5e8;
+
+  --text-strong: #fff5e8;
+  --text-body: rgba(255, 245, 232, 0.82);
+  --text-muted: rgba(255, 245, 232, 0.58);
+  --text-faint: rgba(255, 245, 232, 0.36);
+  --text-on-accent: #17191c;
+
+  --primary: #5cb8b2;
+  --primary-weak: rgba(92, 184, 178, 0.14);
+  --secondary: #ffb173;
+  --secondary-weak: rgba(255, 177, 115, 0.14);
+  --highlight: #ff6766;
+  --highlight-weak: rgba(255, 103, 102, 0.14);
+  --success: #5cb8b2;
+  --warning: #ffb173;
+  --danger: #ff6766;
+
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.14);
+  --shadow-ambient: 0 8px 24px rgba(0, 0, 0, 0.35);
+  --shadow-hover: 0 14px 32px rgba(0, 0, 0, 0.45);
+}
+
+/* ── Global reduced-motion safety net ────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

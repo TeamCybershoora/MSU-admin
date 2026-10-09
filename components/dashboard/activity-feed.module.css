@@ -1,0 +1,96 @@
+/* ── ActivityFeed ───────────────────────────────────────────────────── */
+
+.list {
+  display: flex;
+  flex-direction: column;
+  list-style: none;
+}
+
+.item {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: 0.6rem 0.5rem;
+  border-radius: 10px;
+  opacity: 0;
+  animation: itemIn 260ms var(--ease-out) forwards;
+  transition: background var(--dur-fast) var(--ease-out);
+}
+
+.item:hover {
+  background: var(--surface-sunken);
+}
+
+/* Vertical connector between dots. */
+.item:not(:last-child)::before {
+  content: "";
+  position: absolute;
+  left: calc(0.5rem + 3.5px);
+  top: 1.55rem;
+  bottom: -0.15rem;
+  width: 1px;
+  background: var(--border-subtle);
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  margin-top: 0.42rem;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 15%, transparent);
+}
+
+.text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.title {
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: var(--text-body);
+}
+
+.detail {
+  font-size: 0.74rem;
+  color: var(--text-faint);
+  margin-top: 0.1rem;
+}
+
+.at {
+  font-size: 0.7rem;
+  color: var(--text-faint);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.empty {
+  padding: var(--space-6) var(--space-2);
+  text-align: center;
+  color: var(--text-faint);
+  font-size: 0.85rem;
+}
+
+@keyframes itemIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .item {
+    opacity: 1;
+    animation: none;
+    transform: none;
+  }
+}

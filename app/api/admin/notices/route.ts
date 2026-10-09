@@ -219,7 +219,9 @@ export async function GET(req: Request) {
 
     const [notices, total] = await Promise.all([
       Notice.find(query)
-        .sort({ publishedDate: -1 })
+        // `_id` tie-break keeps page boundaries stable when several notices
+        // share a publishedDate (each page is a separate query).
+        .sort({ publishedDate: -1, _id: -1 })
         .skip(skip)
         .limit(limit)
         .lean(),

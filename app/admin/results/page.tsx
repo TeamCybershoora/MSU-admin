@@ -30,7 +30,7 @@
  *   - GET/POST/PUT/DELETE /api/admin/results (server-side routes)
  */
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { Search, Filter, Eye, Edit3, ChevronLeft, ChevronRight, FileText, X, Plus, Trash2, Printer } from "lucide-react";
 import { getStoredToken } from "@/lib/auth";
 import Card, { CardHeader } from "@/components/ui/card";
@@ -454,20 +454,30 @@ export default function AdminResultsPage() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState("");
 
+  // Monotonic request id: only the newest request may write state, so a slow
+  // earlier response can never overwrite a newer (filtered) one.
+  const requestSeq = useRef(0);
+
   const fetchResults = useCallback(async (page = 1) => {
     const token = getStoredToken(); if (!token) return;
+    const seq = ++requestSeq.current;
     setLoading(true); setError("");
     try {
       const params = new URLSearchParams({ page: page.toString(), limit: "20" });
       if (search) params.set("search", search);
       if (statusFilter) params.set("status", statusFilter);
       const res = await fetch(`/api/admin/results?${params}`, { headers: { Authorization: `Bearer ${token}` } });
+      if (seq !== requestSeq.current) return;
       if (!res.ok) { setError("Unable to load results."); return; }
       const data = await res.json();
+      if (seq !== requestSeq.current) return;
       if (data.success) { setResults(data.data); setPagination(data.pagination); }
-    } catch { setError("Unable to connect to server."); } finally { setLoading(false); }
+    } catch { if (seq === requestSeq.current) setError("Unable to connect to server."); }
+    finally { if (seq === requestSeq.current) setLoading(false); }
   }, [search, statusFilter]);
 
+  // Single source of refetch: filter/search handlers only set state — an
+  // immediate refetch there would run a stale closure and race this request.
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchResults(1);
@@ -893,18 +903,29 @@ export default function AdminResultsPage() {
             <div className={styles.searchInput}>
               <Search size={16} />
               <input type="text" placeholder="Search by name, roll number, or enrollment..." value={search} onChange={(e) => setSearch(e.target.value)} />
-              {search && (<button type="button" className={styles.clearBtn} onClick={() => { setSearch(""); setTimeout(() => fetchResults(1), 0); }}><X size={14} /></button>)}
+              {search && (<button type="button" className={styles.clearBtn} onClick={() => { setSearch(""); }}><X size={14} /></button>)}
             </div>
             <Button type="submit" variant="primary" size="sm"><Search size={14} /> Search</Button>
           </form>
           <div className={styles.toolbarRight}>
             <div className={styles.filterRow}>
               <Filter size={14} />
-              <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setTimeout(() => fetchResults(1), 0); }} className={styles.select}>
-                <option value="">All Status</option>
-                <option value="PASS">Pass</option>
-                <option value="FAIL">Fail</option>
-              </select>
+              <SearchableSelect
+                id="results-status-filter"
+                variant="compact"
+                label="Filter by status"
+                placeholder="All Status"
+                value={statusFilter}
+                options={[
+                  { value: "", label: "All Status" },
+                  { value: "PASS", label: "Pass" },
+                  { value: "FAIL", label: "Fail" },
+                ]}
+                triggerClassName={styles.select}
+                onChange={(value) => {
+                  setStatusFilter(value);
+                }}
+              />
             </div>
             <Button variant="primary" size="sm" onClick={() => { setCreateForm(blankForm()); setCreateError(""); setCreateSuccess(""); setStructureDetail(null); setDetailError(""); setShowCreateForm(true); }}><Plus size={14} /> Add Result</Button>
           </div>

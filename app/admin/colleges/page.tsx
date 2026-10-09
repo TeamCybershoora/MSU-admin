@@ -29,7 +29,7 @@
  *   - GET/PUT /api/admin/site-config (server-side routes)
  */
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Search,
   Edit3,
@@ -44,6 +44,7 @@ import {
 import { getStoredToken } from "@/lib/auth";
 import Card, { CardHeader } from "@/components/ui/card";
 import Button from "@/components/ui/button";
+import SearchableSelect from "@/components/ui/searchable-select";
 import Modal, { ConfirmDialog } from "@/components/ui/modal";
 import RecordList, { RecordCard, RecordField } from "@/components/ui/record-list";
 import EmptyState from "@/components/empty-state";
@@ -91,9 +92,14 @@ export default function AdminCollegesPage() {
   const [pdfSuccess, setPdfSuccess] = useState("");
   const [pdfError, setPdfError] = useState("");
 
+  // Monotonic request id: only the newest request may write state, so a slow
+  // earlier response can never overwrite a newer (filtered) one.
+  const requestSeq = useRef(0);
+
   const fetchColleges = useCallback(async (page = 1) => {
     const token = getStoredToken();
     if (!token) return;
+    const seq = ++requestSeq.current;
     setLoading(true);
     setError("");
     try {
@@ -101,10 +107,13 @@ export default function AdminCollegesPage() {
       if (search) params.set("search", search);
       if (districtFilter) params.set("district", districtFilter);
       const res = await fetch(`/api/admin/colleges?${params}`, { headers: { Authorization: `Bearer ${token}` } });
+      if (seq !== requestSeq.current) return;
       if (!res.ok) { setError("Unable to load colleges."); return; }
       const data = await res.json();
+      if (seq !== requestSeq.current) return;
       if (data.success) { setColleges(data.data); setPagination(data.pagination); }
-    } catch { setError("Unable to connect to server."); } finally { setLoading(false); }
+    } catch { if (seq === requestSeq.current) setError("Unable to connect to server."); }
+    finally { if (seq === requestSeq.current) setLoading(false); }
   }, [search, districtFilter]);
 
   const fetchPdfConfig = useCallback(async () => {
@@ -190,12 +199,21 @@ export default function AdminCollegesPage() {
             <div className={styles.searchInput}>
               <Search size={16} />
               <input type="text" placeholder="Search colleges..." value={search} onChange={(e) => setSearch(e.target.value)} />
-              {search && (<button type="button" className={styles.clearBtn} onClick={() => { setSearch(""); setTimeout(() => fetchColleges(1), 0); }}><X size={14} /></button>)}
+              {search && (<button type="button" className={styles.clearBtn} onClick={() => { setSearch(""); }}><X size={14} /></button>)}
             </div>
-            <select value={districtFilter} onChange={(e) => setDistrictFilter(e.target.value)} className={styles.select}>
-              <option value="">All Districts</option>
-              {DISTRICTS.map((d) => (<option key={d} value={d}>{d}</option>))}
-            </select>
+            <SearchableSelect
+              id="colleges-district-filter"
+              variant="compact"
+              label="Filter by district"
+              placeholder="All Districts"
+              value={districtFilter}
+              options={[
+                { value: "", label: "All Districts" },
+                ...DISTRICTS.map((d) => ({ value: d, label: d })),
+              ]}
+              triggerClassName={styles.select}
+              onChange={(value) => setDistrictFilter(value)}
+            />
             <Button type="submit" variant="primary" size="sm"><Search size={14} /> Search</Button>
           </form>
           <Button variant="primary" size="sm" onClick={openCreateForm}><Plus size={14} /> Add College</Button>

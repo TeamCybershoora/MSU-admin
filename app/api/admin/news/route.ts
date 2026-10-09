@@ -206,7 +206,7 @@ export async function GET(req: Request) {
 
     const [items, total] = await Promise.all([
       News.find(query)
-        .sort({ publishedDate: -1, displayOrder: 1, createdAt: 1 })
+        .sort({ publishedDate: -1, displayOrder: 1, createdAt: 1, _id: 1 })
         .skip(skip)
         .limit(limit)
         .lean(),

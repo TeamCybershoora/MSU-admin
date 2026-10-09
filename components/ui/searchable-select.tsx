@@ -73,6 +73,17 @@ export interface SearchableSelectProps {
   clearable?: boolean;
   hint?: string;
   /**
+   * Presentation. "field" (default) is the labelled form control; "compact" is
+   * a filter-bar trigger (no visible label, no search input, no clear action)
+   * that reuses the SAME animated option list.
+   */
+  variant?: "field" | "compact";
+  /** Extra class for the compact trigger, so a host can match its own filter
+   *  control styling. Ignored in "field" mode. */
+  triggerClassName?: string;
+  /** Accessible name for the compact trigger (filters show no visible label). */
+  ariaLabel?: string;
+  /**
    * An EXPLICIT create action rendered at the foot of the option list, e.g.
    * "+ Add New Programme". It is only ever an affordance: the option list still
    * contains only real values, and typed text never becomes a value by itself.
@@ -97,6 +108,9 @@ interface MenuPosition {
   openUp: boolean;
 }
 
+/** Exit-animation length — keep in sync with --dur-short in the module CSS. */
+const MENU_EXIT_MS = 200;
+
 export default function SearchableSelect({
   id,
   label,
@@ -114,6 +128,9 @@ export default function SearchableSelect({
   required = false,
   clearable = true,
   hint,
+  variant = "field",
+  triggerClassName,
+  ariaLabel,
   footerAction,
 }: SearchableSelectProps) {
   const [open, setOpen] = useState(false);
@@ -121,9 +138,15 @@ export default function SearchableSelect({
   const [activeIndex, setActiveIndex] = useState(-1);
   const [mounted, setMounted] = useState(false);
   const [position, setPosition] = useState<MenuPosition | null>(null);
+  // Keeps the portal mounted through the closing animation; it is only
+  // unmounted once the exit transition has finished.
+  const [rendered, setRendered] = useState(false);
 
+  const compact = variant === "compact";
   const rootRef = useRef<HTMLDivElement>(null);
   const controlRef = useRef<HTMLDivElement>(null);
+  // Compact mode anchors its menu on the trigger button, not the field div.
+  const compactRef = useRef<HTMLButtonElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const listId = `${useId()}-listbox`;
@@ -139,7 +162,9 @@ export default function SearchableSelect({
     [options, value]
   );
 
+  // Compact filters are not searchable: the full option list is always shown.
   const filtered = useMemo(() => {
+    if (compact) return options;
     const needle = query.trim().toLowerCase();
     if (!needle) return options;
     return options.filter((option) =>
@@ -147,7 +172,20 @@ export default function SearchableSelect({
         .toLowerCase()
         .includes(needle)
     );
-  }, [options, query]);
+  }, [compact, options, query]);
+
+  // Widest label, rendered invisibly, to lock the trigger width so choosing a
+  // different option never reflows the filter bar (a native <select> sizes to
+  // its widest option; this reproduces that).
+  const sizerLabel = useMemo(
+    () =>
+      options.reduce(
+        (widest, option) =>
+          option.label.length > widest.length ? option.label : widest,
+        ""
+      ),
+    [options]
+  );
 
   const optionId = useCallback(
     (optionValue: string) =>
@@ -165,7 +203,7 @@ export default function SearchableSelect({
   const footerActive = showFooter && activeIndex === filtered.length;
 
   const place = useCallback(() => {
-    const el = controlRef.current;
+    const el = controlRef.current ?? compactRef.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
     const gutter = 12;
@@ -184,8 +222,10 @@ export default function SearchableSelect({
 
   const close = useCallback(() => {
     setOpen(false);
-    setQuery("");
     setActiveIndex(-1);
+    // The query is intentionally NOT reset here: the panel stays mounted for its
+    // exit animation and must keep showing the same filtered options. It is
+    // cleared when the panel unmounts (below) and on the next open.
   }, []);
 
   // Position after mount; the menu is only rendered once a position exists, so
@@ -216,6 +256,18 @@ export default function SearchableSelect({
     return () => document.removeEventListener("pointerdown", onPointerDown, true);
   }, [open, close]);
 
+  // Keep the panel mounted for the exit transition, then tear it down and reset
+  // the filter. Re-opening during the exit cancels the teardown (the element is
+  // reused and transitions back to its open state).
+  useEffect(() => {
+    if (open || !rendered) return;
+    const id = window.setTimeout(() => {
+      setRendered(false);
+      setQuery("");
+    }, MENU_EXIT_MS);
+    return () => window.clearTimeout(id);
+  }, [open, rendered]);
+
   // Keep the active option visible while navigating with the keyboard.
   useEffect(() => {
     if (!open || activeIndex < 0) return;
@@ -233,6 +285,7 @@ export default function SearchableSelect({
 
   function openMenu() {
     if (disabled) return;
+    setRendered(true);
     setOpen(true);
     setQuery("");
     setActiveIndex(options.length > 0 || footerAction ? 0 : -1);
@@ -248,10 +301,10 @@ export default function SearchableSelect({
   function selectOption(option: SearchableOption) {
     onChange(option.value);
     close();
-    inputRef.current?.focus();
+    (inputRef.current ?? compactRef.current)?.focus();
   }
 
-  function handleKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
+  function handleKeyDown(event: React.KeyboardEvent<HTMLElement>) {
     if (disabled) return;
 
     switch (event.key) {
@@ -316,28 +369,32 @@ export default function SearchableSelect({
     }
   }
 
-  const showClear = clearable && !!value && !disabled;
+  const showClear = !compact && clearable && !!value && !disabled;
   const inputValue = open ? query : selected?.label ?? "";
   const inputPlaceholder = open
     ? selected?.label ?? searchPlaceholder
     : placeholder;
 
   const menu =
-    open && mounted && position
+    rendered && mounted && position
       ? createPortal(
           <div
             ref={menuRef}
             id={listId}
             role="listbox"
             aria-label={label}
-            className={styles.menu}
-            style={{
-              left: position.left,
-              width: position.width,
-              top: position.top,
-              maxHeight: position.maxHeight,
-              transform: position.openUp ? "translateY(-100%)" : undefined,
-            }}
+            className={`${styles.menu} ${open ? "" : styles.menuClosing}`}
+            style={
+              {
+                left: position.left,
+                width: position.width,
+                top: position.top,
+                maxHeight: position.maxHeight,
+                // Vertical anchor for the enter/exit animation — composed with
+                // the up/down placement in the module CSS.
+                "--menu-offset": position.openUp ? "-100%" : "0px",
+              } as React.CSSProperties
+            }
           >
             {loading ? (
               <div className={styles.menuState}>
@@ -416,12 +473,52 @@ export default function SearchableSelect({
       : null;
 
   return (
-    <div className={styles.field} ref={rootRef}>
-      <label htmlFor={id} className={styles.label}>
-        {label}
-        {required && <span className={styles.required}> *</span>}
-      </label>
+    <div className={compact ? styles.compactField : styles.field} ref={rootRef}>
+      {!compact && (
+        <label htmlFor={id} className={styles.label}>
+          {label}
+          {required && <span className={styles.required}> *</span>}
+        </label>
+      )}
 
+      {compact && (
+        <button
+          ref={compactRef}
+          id={id}
+          type="button"
+          role="combobox"
+          aria-haspopup="listbox"
+          aria-expanded={open}
+          aria-controls={listId}
+          aria-label={ariaLabel || label}
+          aria-activedescendant={
+            open && activeIndex >= 0 && filtered[activeIndex]
+              ? optionId(filtered[activeIndex].value)
+              : undefined
+          }
+          disabled={disabled}
+          className={`${styles.compactTrigger} ${triggerClassName ?? ""} ${
+            disabled ? styles.controlDisabled : ""
+          }`}
+          onClick={() => (open ? close() : openMenu())}
+          onKeyDown={handleKeyDown}
+        >
+          <span className={styles.compactText}>
+            <span className={styles.compactValue}>
+              {selected?.label ?? placeholder}
+            </span>
+            <span className={styles.compactSizer} aria-hidden="true">
+              {sizerLabel}
+            </span>
+          </span>
+          <ChevronDown
+            size={15}
+            className={`${styles.chevron} ${open ? styles.chevronOpen : ""}`}
+          />
+        </button>
+      )}
+
+      {!compact && (
       <div
         ref={controlRef}
         className={`${styles.control} ${open ? styles.controlOpen : ""} ${
@@ -494,12 +591,13 @@ export default function SearchableSelect({
         >
           <ChevronDown
             size={16}
-            className={open ? styles.chevronOpen : undefined}
+            className={`${styles.chevron} ${open ? styles.chevronOpen : ""}`}
           />
         </button>
       </div>
+      )}
 
-      {hint && <span className={styles.hint}>{hint}</span>}
+      {!compact && hint && <span className={styles.hint}>{hint}</span>}
 
       {menu}
     </div>

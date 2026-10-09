@@ -93,8 +93,59 @@
   cursor: not-allowed;
 }
 
+.chevron {
+  transition: transform var(--dur-short) var(--ease-standard);
+}
+
 .chevronOpen {
   transform: rotate(180deg);
+}
+
+/* ── Compact trigger (filter bars) ─────────────────────────────────
+   A host passes its own filter-control class via `triggerClassName`; this block
+   only supplies the inline flex layout and the width-locking text so the control
+   keeps the page's existing dimensions while reusing the animated option list. */
+
+.compactField {
+  display: inline-flex;
+  position: relative;
+}
+
+.compactTrigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-family: inherit;
+  text-align: left;
+  appearance: none;
+}
+
+.compactTrigger:disabled {
+  cursor: not-allowed;
+}
+
+.compactText {
+  display: inline-grid;
+  min-width: 0;
+}
+
+.compactText > * {
+  grid-area: 1 / 1;
+  white-space: nowrap;
+}
+
+.compactSizer {
+  visibility: hidden;
+}
+
+.compactValue {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.compactTrigger .chevron {
+  flex-shrink: 0;
+  opacity: 0.6;
 }
 
 .hint {
@@ -119,6 +170,32 @@
   display: flex;
   flex-direction: column;
   gap: 0.1rem;
+  /* Enter/exit motion. `--menu-offset` carries the up/down placement (0px, or
+     -100% when the list opens upward) so the animation composes with the fixed
+     positioning instead of fighting the inline transform. */
+  transform: translateY(var(--menu-offset, 0px));
+  animation: menuIn var(--dur-short) var(--ease-standard);
+  transition:
+    opacity var(--dur-short) var(--ease-standard),
+    transform var(--dur-short) var(--ease-standard);
+}
+
+/* Applied for the exit animation; the component unmounts once it completes. */
+.menuClosing {
+  opacity: 0;
+  transform: translateY(calc(var(--menu-offset, 0px) - 8px));
+  pointer-events: none;
+}
+
+@keyframes menuIn {
+  from {
+    opacity: 0;
+    transform: translateY(calc(var(--menu-offset, 0px) - 8px));
+  }
+  to {
+    opacity: 1;
+    transform: translateY(var(--menu-offset, 0px));
+  }
 }
 
 .option {
@@ -135,6 +212,9 @@
   cursor: pointer;
   color: var(--foreground);
   font-family: inherit;
+  transition:
+    background var(--dur-fast) var(--ease-standard),
+    color var(--dur-fast) var(--ease-standard);
 }
 
 .optionActive {

@@ -47,6 +47,7 @@ import { getStoredToken } from "@/lib/auth";
 import Card, { CardHeader } from "@/components/ui/card";
 import Button from "@/components/ui/button";
 import Badge from "@/components/ui/badge";
+import SearchableSelect from "@/components/ui/searchable-select";
 import Modal, { ConfirmDialog } from "@/components/ui/modal";
 import RecordList, { RecordCard, RecordField } from "@/components/ui/record-list";
 import EmptyState from "@/components/empty-state";
@@ -506,18 +507,22 @@ export default function AdminNewsPage() {
           <div className={styles.toolbarRight}>
             <div className={styles.filterRow}>
               <Filter size={14} />
-              <select
+              <SearchableSelect
+                id="news-status-filter"
+                variant="compact"
+                label="Filter by status"
+                placeholder="All Status"
                 value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className={styles.select}
-              >
-                <option value="">All Status</option>
-                {NEWS_STATUSES.map((s) => (
-                  <option key={s} value={s}>
-                    {s.charAt(0).toUpperCase() + s.slice(1)}
-                  </option>
-                ))}
-              </select>
+                options={[
+                  { value: "", label: "All Status" },
+                  ...NEWS_STATUSES.map((s) => ({
+                    value: s,
+                    label: s.charAt(0).toUpperCase() + s.slice(1),
+                  })),
+                ]}
+                triggerClassName={styles.select}
+                onChange={(value) => setStatusFilter(value)}
+              />
             </div>
             <Button
               variant="primary"

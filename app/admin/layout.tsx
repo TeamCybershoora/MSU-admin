@@ -51,8 +51,15 @@ import {
   Newspaper,
   Camera,
   Crown,
+  Briefcase,
+  Gauge,
+  Bell,
+  Radio,
+  ChevronDown,
 } from "lucide-react";
 import { getStoredToken, clearAuthSession } from "@/lib/auth";
+import { useDismiss } from "@/components/dashboard/hooks";
+import type { DashboardApiStats } from "@/components/dashboard";
 import styles from "./layout.module.css";
 
 interface AdminInfo {
@@ -78,7 +85,9 @@ const NAV_ITEMS = [
   { href: "/admin/notices", label: "Notices Management", icon: Megaphone },
   { href: "/admin/news", label: "News Management", icon: Newspaper },
   { href: "/admin/spotlight", label: "Spotlight Management", icon: Camera },
+  { href: "/admin/announcements", label: "Announcement Bar Management", icon: Radio },
   { href: "/admin/leadership", label: "Leadership Management", icon: Crown },
+  { href: "/admin/recruitment", label: "Recruitment Management", icon: Briefcase },
   { href: "/admin/syllabus", label: "Syllabus & Documents", icon: BookOpen },
   { href: "/admin/colleges", label: "College Management", icon: Building2 },
 ];
@@ -140,6 +149,16 @@ const SUPER_ADMIN_NAV_ITEM = {
 };
 
 //
+// The Super Admin dashboard (/admin/super-admin), hosting the Overview and
+// Insights screens. Rendered only for Super Admins — again presentation only.
+//
+const SUPER_ADMIN_DASHBOARD_NAV_ITEM = {
+  href: "/admin/super-admin",
+  label: "Super Admin",
+  icon: Gauge,
+};
+
+//
 // Self-service password change, shown to normal admins. Super Admin passwords
 // are bcrypt-hashed and remain out of scope (see app/api/admin/change-password).
 //
@@ -155,6 +174,27 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [admin, setAdmin] = useState<AdminInfo | null>(null);
   const [checking, setChecking] = useState(true);
+
+  //
+  // Top-bar surfaces. Only one dropdown is open at a time; both close on
+  // outside click / Escape (useDismiss) and on route change below.
+  //
+  const [openMenu, setOpenMenu] = useState<"profile" | "notifications" | null>(null);
+  //
+  // Notification counts are REAL dashboard totals, fetched lazily the first
+  // time the panel is opened. Nothing is fetched (and no badge is faked)
+  // before that, so the shell stays cheap on every admin page.
+  //
+  const [notifications, setNotifications] = useState<DashboardApiStats | null>(null);
+  const [notifyLoading, setNotifyLoading] = useState(false);
+  const [notifyError, setNotifyError] = useState(false);
+
+  const profileRef = useDismiss<HTMLDivElement>(openMenu === "profile", () =>
+    setOpenMenu(null)
+  );
+  const notifyRef = useDismiss<HTMLDivElement>(openMenu === "notifications", () =>
+    setOpenMenu(null)
+  );
   // Enquiry group open/closed. Starts open when landing directly on one of its
   // pages; navigating into the group from anywhere expands it (see the
   // lastPathname adjustment below); the admin can still toggle it manually.
@@ -239,6 +279,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   if (lastPathname !== pathname) {
     setLastPathname(pathname);
     setSidebarOpen(false);
+    setOpenMenu(null);
     if (isActivePath(ENQUIRY_NAV_GROUP.href, pathname)) {
       setEnquiryGroupOpen(true);
     }
@@ -277,6 +318,44 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     router.push("/admin/login");
   }
 
+  /**
+   * Open/close the notification panel, loading the real counts on first open.
+   * The fetch lives in this event handler (not an effect) so no state is set
+   * synchronously during a render pass.
+   */
+  function toggleNotifications() {
+    const next = openMenu === "notifications" ? null : "notifications";
+    setOpenMenu(next);
+    if (next && !notifications && !notifyLoading) void loadNotifications();
+  }
+
+  async function loadNotifications() {
+    const token = getStoredToken();
+    if (!token) return;
+    setNotifyLoading(true);
+    setNotifyError(false);
+    try {
+      const res = await fetch("/api/admin/dashboard", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        setNotifyError(true);
+        return;
+      }
+      const data = await res.json();
+      if (data?.success) setNotifications(data.data as DashboardApiStats);
+      else setNotifyError(true);
+    } catch {
+      setNotifyError(true);
+    } finally {
+      setNotifyLoading(false);
+    }
+  }
+
+  function toggleProfile() {
+    setOpenMenu(openMenu === "profile" ? null : "profile");
+  }
+
   const initials = admin
     ? admin.name
         .split(" ")
@@ -286,9 +365,35 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         .slice(0, 2)
     : "AD";
 
-  const extraNavItem =
-    admin?.role === "super_admin" ? SUPER_ADMIN_NAV_ITEM : CHANGE_PASSWORD_NAV_ITEM;
-  const navItems = [...NAV_ITEMS, extraNavItem];
+  const extraNavItems =
+    admin?.role === "super_admin"
+      ? [SUPER_ADMIN_DASHBOARD_NAV_ITEM, SUPER_ADMIN_NAV_ITEM]
+      : [CHANGE_PASSWORD_NAV_ITEM];
+  const navItems = [...NAV_ITEMS, ...extraNavItems];
+
+  //
+  // Notification items are derived ONLY from real enquiry counts. When nothing
+  // is outstanding the panel says so rather than showing a fabricated alert.
+  //
+  const newEnquiries = notifications?.enquiriesByStatus?.new ?? 0;
+  const inReviewEnquiries = notifications?.enquiriesByStatus?.in_review ?? 0;
+  const notifyItems = [
+    newEnquiries > 0
+      ? {
+          label: `new ${newEnquiries === 1 ? "enquiry" : "enquiries"} awaiting review`,
+          count: newEnquiries,
+          href: "/admin/enquiries/admission",
+        }
+      : null,
+    inReviewEnquiries > 0
+      ? {
+          label: "enquiries currently in review",
+          count: inReviewEnquiries,
+          href: "/admin/enquiries/admission",
+        }
+      : null,
+  ].filter((item): item is { label: string; count: number; href: string } => item !== null);
+  const notifyCount = newEnquiries + inReviewEnquiries;
 
   // Most specific match first: a child page's title beats the group, an exact
   // href beats a prefix match (the Dashboard href matches every /admin path,
@@ -363,8 +468,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               />
             </button>
 
-            {enquiryGroupOpen && (
-              <div className={styles.navSubList} id="enquiry-nav-children">
+            {/* Kept mounted so the section can animate both open and closed;
+                collapsed content is `visibility: hidden` (not focusable). */}
+            <div
+              className={`${styles.navSubList} ${
+                enquiryGroupOpen ? styles.navSubListOpen : ""
+              }`}
+              id="enquiry-nav-children"
+            >
+              <div className={styles.navSubInner}>
                 {ENQUIRY_NAV_GROUP.children.map((child) => {
                   const isActive = isActivePath(child.href, pathname);
                   return (
@@ -381,20 +493,21 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                   );
                 })}
               </div>
-            )}
+            </div>
           </div>
 
-          <Link
-            href={extraNavItem.href}
-            className={`${styles.navItem} ${
-              isActivePath(extraNavItem.href, pathname)
-                ? styles.navItemActive
-                : ""
-            }`}
-          >
-            <extraNavItem.icon />
-            {extraNavItem.label}
-          </Link>
+          {extraNavItems.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={`${styles.navItem} ${
+                isActivePath(item.href, pathname) ? styles.navItemActive : ""
+              }`}
+            >
+              <item.icon />
+              {item.label}
+            </Link>
+          ))}
         </nav>
 
         <div className={styles.sidebarFooter}>
@@ -434,10 +547,123 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             <h1 className={styles.pageTitle}>{pageTitle}</h1>
           </div>
           <div className={styles.headerRight}>
-            <Link href="/" className={styles.navItem} style={{ width: "auto" }}>
+            <Link href="/" className={styles.viewSite} aria-label="View public site">
               <GraduationCap />
-              <span style={{ fontSize: "0.82rem" }}>View Site</span>
+              <span className={styles.viewSiteLabel}>View Site</span>
             </Link>
+
+            {/* Notifications — real dashboard totals, loaded on first open. */}
+            <div className={styles.menuWrap} ref={notifyRef}>
+              <button
+                type="button"
+                className={styles.iconBtn}
+                onClick={toggleNotifications}
+                aria-haspopup="menu"
+                aria-expanded={openMenu === "notifications"}
+                aria-label="Notifications"
+              >
+                <Bell />
+                {notifyCount > 0 && <span className={styles.notifyDot} aria-hidden="true" />}
+              </button>
+
+              {/* Kept mounted (hidden when closed) so it animates both ways. */}
+              <div
+                className={`${styles.dropdown} ${styles.dropdownRight} ${
+                  openMenu === "notifications" ? styles.dropdownOpen : ""
+                }`}
+                role="menu"
+                aria-hidden={openMenu !== "notifications"}
+              >
+                <div className={styles.dropdownHeader}>
+                  <span className={styles.dropdownTitle}>Notifications</span>
+                </div>
+                {notifyLoading ? (
+                  <p className={styles.dropdownMuted}>Loading…</p>
+                ) : notifyError ? (
+                  <p className={styles.dropdownMuted}>
+                    Unable to load notifications.
+                  </p>
+                ) : notifyItems.length === 0 ? (
+                  <p className={styles.dropdownMuted}>
+                    Nothing needs attention right now.
+                  </p>
+                ) : (
+                  <ul className={styles.notifyList}>
+                    {notifyItems.map((item) => (
+                      <li key={item.label}>
+                        <Link href={item.href} className={styles.notifyItem}>
+                          <span className={styles.notifyCount}>{item.count}</span>
+                          <span className={styles.notifyText}>{item.label}</span>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+
+            {/* Admin profile + account actions. */}
+            <div className={styles.menuWrap} ref={profileRef}>
+              <button
+                type="button"
+                className={styles.profileBtn}
+                onClick={toggleProfile}
+                aria-haspopup="menu"
+                aria-expanded={openMenu === "profile"}
+              >
+                <span className={styles.profileAvatar}>{initials}</span>
+                <span className={styles.profileText}>
+                  <span className={styles.profileName}>{admin?.name ?? "Administrator"}</span>
+                  <span className={styles.profileRole}>{admin?.role ?? ""}</span>
+                </span>
+                <ChevronDown
+                  className={`${styles.profileChevron} ${
+                    openMenu === "profile" ? styles.profileChevronOpen : ""
+                  }`}
+                  aria-hidden="true"
+                />
+              </button>
+
+              {/* Kept mounted (hidden when closed) so it animates both ways. */}
+              <div
+                className={`${styles.dropdown} ${styles.dropdownRight} ${
+                  openMenu === "profile" ? styles.dropdownOpen : ""
+                }`}
+                role="menu"
+                aria-hidden={openMenu !== "profile"}
+              >
+                <div className={styles.dropdownHeader}>
+                  <span className={styles.dropdownTitle}>
+                    {admin?.name ?? "Administrator"}
+                  </span>
+                  {admin?.email && (
+                    <span className={styles.dropdownSubtitle}>{admin.email}</span>
+                  )}
+                </div>
+
+                {extraNavItems.map((item) => (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={styles.dropdownLink}
+                    role="menuitem"
+                  >
+                    <item.icon />
+                    {item.label}
+                  </Link>
+                ))}
+
+                <button
+                  type="button"
+                  className={styles.dropdownLink}
+                  onClick={handleLogout}
+                  role="menuitem"
+                >
+                  <LogOut />
+                  Logout
+                </button>
+              </div>
+            </div>
           </div>
         </header>
         <main className={styles.content}>{children}</main>

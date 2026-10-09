@@ -11,7 +11,8 @@
  *   1. Form submits email + password to POST /api/admin/login
  *   2. Server verifies credentials against the Admin collection (bcrypt)
  *   3. On success, stores token and user JSON in localStorage
- *   4. Redirects to /admin dashboard
+ *   4. Redirects by role: Super Admins land on /admin/super-admin, every other
+ *      admin lands on /admin (unchanged)
  *
  * Security:
  * - Generic error message ("Invalid email or password.") prevents
@@ -30,6 +31,16 @@ import { GraduationCap, Lock, Mail, ArrowRight, Shield } from "lucide-react";
 import { getStoredToken, clearAuthSession } from "@/lib/auth";
 import styles from "./page.module.css";
 
+/**
+ * Where an authenticated admin lands after login, by role.
+ *
+ * Super Admins get their own dashboard; every other role keeps the original
+ * /admin landing. Uses the role the server returned (never a client guess).
+ */
+function adminLandingPath(role: string | undefined): string {
+  return role === "super_admin" ? "/admin/super-admin" : "/admin";
+}
+
 export default function AdminLoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -44,7 +55,7 @@ export default function AdminLoginPage() {
       try {
         const payload = JSON.parse(atob(token.split(".")[1]));
         if (payload.role !== "student") {
-          router.push("/admin");
+          router.push(adminLandingPath(payload.role));
         }
       } catch {
         clearAuthSession();
@@ -96,7 +107,7 @@ export default function AdminLoginPage() {
         })
       );
 
-      router.push("/admin");
+      router.push(adminLandingPath(data.admin.role));
     } catch {
       setError("Unable to connect to server. Please try again.");
       setLoading(false);

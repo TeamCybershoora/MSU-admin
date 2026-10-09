@@ -25,7 +25,7 @@
  * This phase deliberately does NOT read or write Syllabus or Result data.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   ChevronLeft,
@@ -42,6 +42,7 @@ import {
   X,
 } from "lucide-react";
 import Badge from "@/components/ui/badge";
+import SearchableSelect from "@/components/ui/searchable-select";
 import Button from "@/components/ui/button";
 import Card, { CardHeader } from "@/components/ui/card";
 import { ConfirmDialog } from "@/components/ui/modal";
@@ -96,8 +97,13 @@ export default function AdminAcademicStructurePage() {
     useState<ProgrammeStructureSummary | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
+  // Monotonic request id: only the newest request may write state, so a slow
+  // earlier response can never overwrite a newer (filtered) one.
+  const requestSeq = useRef(0);
+
   const fetchStructures = useCallback(
     async (page = 1) => {
+      const seq = ++requestSeq.current;
       setLoading(true);
       setError("");
       try {
@@ -107,6 +113,7 @@ export default function AdminAcademicStructurePage() {
           status: statusFilter,
         });
 
+        if (seq !== requestSeq.current) return;
         if (!result.success) {
           setError(result.message || "Unable to load programme structures.");
           return;
@@ -115,12 +122,14 @@ export default function AdminAcademicStructurePage() {
         setStructures(result.data ?? []);
         if (result.pagination) setPagination(result.pagination);
       } finally {
-        setLoading(false);
+        if (seq === requestSeq.current) setLoading(false);
       }
     },
     [search, statusFilter]
   );
 
+  // Single source of refetch: filter/search handlers only set state — an
+  // immediate refetch there would run a stale closure and race this request.
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { fetchStructures(1); }, [fetchStructures]);
 
@@ -241,7 +250,6 @@ export default function AdminAcademicStructurePage() {
                   className={styles.clearBtn}
                   onClick={() => {
                     setSearch("");
-                    setTimeout(() => fetchStructures(1), 0);
                   }}
                 >
                   <X size={14} />
@@ -250,19 +258,22 @@ export default function AdminAcademicStructurePage() {
             </div>
             <div className={styles.filterRow}>
               <Filter size={14} />
-              <select
+              <SearchableSelect
+                id="academic-structure-status-filter"
+                variant="compact"
+                label="Filter by status"
+                placeholder="All Statuses"
                 value={statusFilter}
-                onChange={(e) => {
-                  setStatusFilter(e.target.value);
-                  setTimeout(() => fetchStructures(1), 0);
+                options={[
+                  { value: "", label: "All Statuses" },
+                  { value: "ACTIVE", label: "ACTIVE" },
+                  { value: "INACTIVE", label: "INACTIVE" },
+                ]}
+                triggerClassName={styles.select}
+                onChange={(value) => {
+                  setStatusFilter(value);
                 }}
-                className={styles.select}
-                aria-label="Filter by status"
-              >
-                <option value="">All Statuses</option>
-                <option value="ACTIVE">ACTIVE</option>
-                <option value="INACTIVE">INACTIVE</option>
-              </select>
+              />
             </div>
             <Button type="submit" variant="primary" size="sm">
               <Search size={14} /> Search

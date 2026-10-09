@@ -96,7 +96,13 @@ export async function GET(req: Request) {
     const query = buildEnquiryListQuery(filters);
 
     const [enquiries, total] = await Promise.all([
-      Enquiry.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+      Enquiry.find(query)
+        // `_id` tie-break keeps page boundaries stable for enquiries created in
+        // the same instant (each page is a separate query).
+        .sort({ createdAt: -1, _id: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
       Enquiry.countDocuments(query),
     ]);
 
